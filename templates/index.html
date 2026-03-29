@@ -1,14 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StegoVault — Hidden in Plain Sight</title>
-  <meta name="description" content="Hide secret messages inside plain text or any file inside an image using Zero-width and 2-bit LSB steganography." />
+  <meta name="description"
+    content="Hide secret messages inside plain text or any file inside an image using Zero-width and 2-bit LSB steganography." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="icon" href="{{ url_for('static', filename='image/logo.png') }}" />
 </head>
 
 <body>
@@ -23,7 +28,7 @@
   <header class="site-header">
     <div class="header-inner container">
       <div class="logo">
-        <span class="logo-icon">⬡</span>
+        <img src="{{ url_for('static', filename='image/logo.png') }}" alt="StegoVault" class="logo-img" />
         <span class="logo-text">Stego<strong>Vault</strong></span>
       </div>
       <p class="logo-tagline">Hidden in plain sight</p>
@@ -35,10 +40,12 @@
 
     <!-- Tab Bar -->
     <nav class="tab-bar" role="tablist" aria-label="Steganography mode">
-      <button id="tab-text"  class="tab-btn active" role="tab" aria-selected="true"  aria-controls="panel-text"  data-panel="text">
+      <button id="tab-text" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-text"
+        data-panel="text">
         <span class="tab-icon">✦</span> Text
       </button>
-      <button id="tab-image" class="tab-btn"        role="tab" aria-selected="false" aria-controls="panel-image" data-panel="image">
+      <button id="tab-image" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-image"
+        data-panel="image">
         <span class="tab-icon">◈</span> Image
       </button>
     </nav>
@@ -52,7 +59,8 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title"><span class="chip chip-encode">ENCODE</span> Hide a Message in Text</h2>
-          <p class="card-desc">Your secret is woven invisibly into the cover text using <em>Zero-width Unicode characters</em> — completely undetectable to the naked eye.</p>
+          <p class="card-desc">Your secret is woven invisibly into the cover text using <em>Zero-width Unicode
+              characters</em> — completely undetectable to the naked eye.</p>
         </div>
 
         <div class="form-grid">
@@ -77,7 +85,11 @@
           <div class="result-header">
             <span class="result-label">Encoded Text (copy &amp; share):</span>
             <button id="btn-copy-text" class="btn-icon" title="Copy to clipboard" aria-label="Copy encoded text">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
             </button>
           </div>
           <pre id="text-encode-output" class="result-content"></pre>
@@ -90,7 +102,8 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title"><span class="chip chip-decode">DECODE</span> Reveal Hidden Message</h2>
-          <p class="card-desc">Paste text that may contain a hidden message. StegoVault will extract and reveal any invisible content.</p>
+          <p class="card-desc">Paste text that may contain a hidden message. StegoVault will extract and reveal any
+            invisible content.</p>
         </div>
 
         <div class="field">
@@ -123,7 +136,8 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title"><span class="chip chip-encode">ENCODE</span> Hide a File inside an Image</h2>
-          <p class="card-desc">Using <em>2-bit LSB (Least Significant Bit)</em> embedding, any file — PDF, ZIP, MP3, document — is hidden inside the cover image with imperceptible visual change.</p>
+          <p class="card-desc">Using <em>2-bit LSB (Least Significant Bit)</em> embedding, any file — PDF, ZIP, MP3,
+            document — is hidden inside the cover image with imperceptible visual change.</p>
         </div>
 
         <div class="form-grid">
@@ -180,8 +194,14 @@
         <div id="image-encode-result" class="result-box" hidden>
           <div class="result-header">
             <span class="result-label">Encoded Image (visually identical to cover):</span>
-            <button id="btn-download-encoded" class="btn-icon" title="Download encoded image" aria-label="Download encoded image">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <button id="btn-download-encoded" class="btn-icon" title="Download encoded image"
+              aria-label="Download encoded image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
             </button>
           </div>
           <img id="image-encode-output" class="result-img" alt="Encoded image result" />
@@ -193,7 +213,8 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title"><span class="chip chip-decode">DECODE</span> Extract Hidden File</h2>
-          <p class="card-desc">Upload a StegoVault-encoded PNG to extract the hidden file from its pixel data. The original filename and type are fully preserved.</p>
+          <p class="card-desc">Upload a StegoVault-encoded PNG to extract the hidden file from its pixel data. The
+            original filename and type are fully preserved.</p>
         </div>
 
         <div class="field">
@@ -206,7 +227,8 @@
             </div>
             <img id="encoded-preview" class="drop-preview" alt="Encoded image preview" hidden />
           </div>
-          <input id="img-encoded" type="file" accept="image/png" class="sr-only" aria-label="Encoded image file input" />
+          <input id="img-encoded" type="file" accept="image/png" class="sr-only"
+            aria-label="Encoded image file input" />
         </div>
 
         <button id="btn-image-decode" class="btn btn-secondary">
@@ -246,4 +268,5 @@
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
+
 </html>
