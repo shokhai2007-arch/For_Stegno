@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+build/
+dist/
+*.egg-info/
+
+# Flask & Environment
+.env
+instance/
+.pytest_cache/
+
+# Steganography Project Specifics
+# (Prevent accidental commit of test/temp images)
+/tmp/
+stego_encoded.png
+encoded_*.png
+decoded_*.*
+secret_decoded.*
+
+# OS
+.DS_Store
+Thumbs.db
