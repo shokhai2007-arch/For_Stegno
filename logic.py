@@ -47,13 +47,13 @@ def _text_to_bits(text: str) -> str:
 
 def _bits_to_text(bits: str) -> str:
     """Convert a binary string back to a UTF-8 string."""
-    chars = []
-    for i in range(0, len(bits), 8):
+    raw = bytearray()
+    for i in range(0, len(bits) - 7, 8):
         byte = bits[i:i + 8]
         if len(byte) < 8:
             break
-        chars.append(chr(int(byte, 2)))
-    return "".join(chars)
+        raw.append(int(byte, 2))
+    return raw.decode("utf-8")
 
 
 def encode_text_zero_width(cover: str, secret: str) -> str:
@@ -155,9 +155,12 @@ def image_capacity(cover_bytes: bytes) -> int:
     Return the maximum number of bytes that can be hidden in the cover image
     using 2-bit LSB encoding (2 bits per channel × 3 channels per pixel).
     """
-    img = Image.open(io.BytesIO(cover_bytes))
-    w, h = img.size
-    return (w * h * 3 * 2) // 8
+    try:
+        img = Image.open(io.BytesIO(cover_bytes))
+        w, h = img.size
+        return (w * h * 3 * 2) // 8
+    except Exception as e:
+        raise ValueError(f"Could not read cover image: {e}")
 
 
 # Public API
@@ -166,26 +169,17 @@ def image_capacity(cover_bytes: bytes) -> int:
 def encode_file_in_image(cover_bytes: bytes, file_bytes: bytes, filename: str) -> bytes:
     """
     Embed any binary file into a cover image using 2-bit LSB steganography.
-
-    Payload layout
-    ──────────────
-    [1 byte]  filename length (max 255)
-    [N bytes] filename (UTF-8)
-    [4 bytes] file data length (big-endian uint32)
-    [M bytes] file data
-
-    Two LSBs of each R, G, B channel carry the payload bit-stream.
-
-    Raises ValueError if the file is too large for the cover image.
     """
-    cover = Image.open(io.BytesIO(cover_bytes)).convert("RGB")
-    width, height = cover.size
+    try:
+        cover = Image.open(io.BytesIO(cover_bytes)).convert("RGB")
+    except Exception as e:
+        raise ValueError(f"Invalid cover image format: {e}")
 
+    width, height = cover.size
     # ── Capacity check ──────────────────────────────────────────────────
-    max_bytes = (width * height * 3 * 2) // 8   # 2 bits per channel
+    max_bytes = (width * height * 3 * 2) // 8
 
     fname_encoded = filename.encode("utf-8")[:255]
-    # Header: 1 (fname len) + N (fname) + 4 (data len)
     header = bytes([len(fname_encoded)]) + fname_encoded + struct.pack(">I", len(file_bytes))
     payload = header + file_bytes
 
@@ -193,33 +187,25 @@ def encode_file_in_image(cover_bytes: bytes, file_bytes: bytes, filename: str) -
         usable = max_bytes - len(header)
         raise ValueError(
             f"File is too large to hide in this image. "
-            f"Maximum file size for this cover image: {usable:,} bytes "
-            f"({usable / 1024:.1f} KB). "
-            f"Your file is {len(file_bytes):,} bytes "
-            f"({len(file_bytes) / 1024:.1f} KB). "
-            f"Please use a larger cover image or a smaller file."
+            f"Maximum file size for this cover image: {usable:,} bytes. "
+            f"Your file is {len(file_bytes):,} bytes."
         )
 
     # ── Embed ────────────────────────────────────────────────────────────
     bits = _to_bits(payload)
-
-    # Flatten pixel channels to a mutable list
     flat = []
     for r, g, b in cover.getdata():
         flat.extend([r, g, b])
 
-    # Write 2 bits into the 2 LSBs of each channel value
     for i in range(0, len(bits) - 1, 2):
         channel_idx = i // 2
         two_bits = (bits[i] << 1) | bits[i + 1]
         flat[channel_idx] = (flat[channel_idx] & 0xFC) | two_bits
 
-    # Handle an odd trailing bit (rare)
     if len(bits) % 2 == 1:
         channel_idx = len(bits) // 2
         flat[channel_idx] = (flat[channel_idx] & 0xFE) | bits[-1]
 
-    # Rebuild image
     new_pixels = [(flat[i], flat[i + 1], flat[i + 2]) for i in range(0, len(flat), 3)]
     result_img = Image.new("RGB", (width, height))
     result_img.putdata(new_pixels)
@@ -232,17 +218,13 @@ def encode_file_in_image(cover_bytes: bytes, file_bytes: bytes, filename: str) -
 def decode_file_from_image(encoded_bytes: bytes) -> tuple:
     """
     Extract the hidden file from a 2-bit LSB encoded PNG.
-
-    Returns
-    ───────
-    (file_bytes: bytes, filename: str)
-
-    Raises ValueError if the image does not contain a valid StegoVault payload.
     """
-    encoded = Image.open(io.BytesIO(encoded_bytes)).convert("RGB")
-    width, height = encoded.size
+    try:
+        encoded = Image.open(io.BytesIO(encoded_bytes)).convert("RGB")
+    except Exception as e:
+        raise ValueError(f"Not a valid image file: {e}")
 
-    # Flatten channels
+    width, height = encoded.size
     flat = []
     for r, g, b in encoded.getdata():
         flat.extend([r, g, b])
@@ -254,40 +236,34 @@ def decode_file_from_image(encoded_bytes: bytes) -> tuple:
         bits.append(val & 1)
 
     def read_bytes(offset_bits: int, n: int) -> tuple:
-        """Read n bytes from bits starting at offset_bits. Returns (data, new_offset)."""
         chunk = bits[offset_bits: offset_bits + n * 8]
         if len(chunk) < n * 8:
-            raise ValueError("Encoded image appears corrupted or was not created by StegoVault.")
+            raise ValueError("Payload extraction failed: end of data reached prematurely.")
         return _bits_to_bytes(chunk), offset_bits + n * 8
 
     offset = 0
-
-    # Read filename length (1 byte)
-    fname_len_bytes, offset = read_bytes(offset, 1)
-    fname_len = fname_len_bytes[0]
-
-    if fname_len == 0 or fname_len > 255:
-        raise ValueError("Encoded image appears corrupted or was not created by StegoVault.")
-
-    # Read filename
-    fname_data, offset = read_bytes(offset, fname_len)
     try:
+        # Read filename length (1 byte)
+        fname_len_bytes, offset = read_bytes(offset, 1)
+        fname_len = fname_len_bytes[0]
+
+        if fname_len == 0 or fname_len > 255:
+            raise ValueError("No valid StegoVault metadata found in this image.")
+
+        # Read filename
+        fname_data, offset = read_bytes(offset, fname_len)
         filename = fname_data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError("Corrupted filename in encoded image.") from exc
 
-    # Read file data length (4 bytes, big-endian)
-    size_data, offset = read_bytes(offset, 4)
-    file_size = struct.unpack(">I", size_data)[0]
+        # Read file data length (4 bytes)
+        size_data, offset = read_bytes(offset, 4)
+        file_size = struct.unpack(">I", size_data)[0]
 
-    # Sanity check: the declared size must fit within remaining bits
-    remaining_bytes = (len(bits) - offset) // 8
-    if file_size > remaining_bytes:
-        raise ValueError(
-            f"Corrupted payload: declared size ({file_size:,} bytes) exceeds "
-            f"remaining image capacity ({remaining_bytes:,} bytes)."
-        )
+        remaining_bytes = (len(bits) - offset) // 8
+        if file_size > remaining_bytes:
+            raise ValueError("Metadata corruption: declared size exceeds image capacity.")
 
-    # Read actual file data
-    file_data, _ = read_bytes(offset, file_size)
-    return file_data, filename
+        # Read actual file data
+        file_data, _ = read_bytes(offset, file_size)
+        return file_data, filename
+    except (ValueError, struct.error, UnicodeDecodeError):
+        raise ValueError("This image does not contain a valid or readable StegoVault hidden file.")

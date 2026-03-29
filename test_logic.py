@@ -1,5 +1,5 @@
 """
-Round-trip tests for the manual steganography logic.
+Round-trip tests for the StegoVault steganography logic.
 Run with: python test_logic.py
 """
 import sys
@@ -8,12 +8,16 @@ from PIL import Image
 from logic import (
     encode_text_zero_width,
     decode_text_zero_width,
-    encode_image_lsb,
-    decode_image_lsb,
+    encode_file_in_image,
+    decode_file_from_image,
+    image_capacity,
 )
 
-PASS = "\033[92m✓ PASS\033[0m"
-FAIL = "\033[91m✗ FAIL\033[0m"
+GREEN = "\033[92m"
+RED   = "\033[91m"
+RESET = "\033[0m"
+PASS  = f"{GREEN}✓ PASS{RESET}"
+FAIL  = f"{RED}✗ FAIL{RESET}"
 errors = 0
 
 
@@ -27,13 +31,22 @@ def run(name, fn):
         errors += 1
 
 
-# ── Text steganography tests ──────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _make_image_bytes(color=(200, 200, 200), size=(64, 64)) -> bytes:
+    img = Image.new("RGB", size, color)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ── Text Steganography ────────────────────────────────────────────────────────
 
 def test_text_basic_roundtrip():
     cover  = "The weather is nice today."
     secret = "Meet me at midnight."
     encoded = encode_text_zero_width(cover, secret)
-    assert encoded != cover, "Encoded should differ from cover"
+    assert encoded != cover, "Encoded text should differ from cover"
     decoded = decode_text_zero_width(encoded)
     assert decoded == secret, f"Expected '{secret}', got '{decoded}'"
 
@@ -50,7 +63,6 @@ def test_text_cover_preserved():
     cover  = "Hello World"
     secret = "42"
     encoded = encode_text_zero_width(cover, secret)
-    # Strip zero-width characters and compare visible text
     zw_chars = {"\u200b", "\u200c", "\u200d", "\u2060"}
     visible = "".join(c for c in encoded if c not in zw_chars)
     assert visible == cover, f"Visible cover changed: got '{visible}'"
@@ -72,68 +84,121 @@ def test_text_no_hidden_message():
         pass
 
 
-# ── Image steganography tests ──────────────────────────────────────────────
+# ── Image / File-in-Image Steganography ──────────────────────────────────────
 
-def _make_image_bytes(color=(100, 150, 200), size=(64, 64)) -> bytes:
-    img = Image.new("RGB", size, color)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
-
-
-def test_image_encode_decode_roundtrip():
-    cover_bytes  = _make_image_bytes(color=(200, 200, 200))
-    secret_bytes = _make_image_bytes(color=(255, 0, 0))
-
-    encoded = encode_image_lsb(cover_bytes, secret_bytes)
-    revealed = decode_image_lsb(encoded)
-
-    # The revealed image should be reddish (upper nibble of 255 = 0xF0 → 0xF0 = 240)
-    img = Image.open(io.BytesIO(revealed)).convert("RGB")
-    px  = img.getpixel((10, 10))
-    # Red channel of secret was 255 → after 4-bit encoding, decoded red ≈ 240
-    assert px[0] >= 224, f"Red channel should be high, got {px[0]}"
-    assert px[1] <= 32,  f"Green channel should be low, got {px[1]}"
-    assert px[2] <= 32,  f"Blue channel should be low, got {px[2]}"
+def test_capacity_function():
+    img_bytes = _make_image_bytes(size=(100, 100))
+    cap = image_capacity(img_bytes)
+    # 100 x 100 x 3 channels x 2 bits / 8 = 7500 bytes
+    assert cap == 7500, f"Expected 7500, got {cap}"
 
 
-def test_image_output_is_png():
-    cover_bytes  = _make_image_bytes()
-    secret_bytes = _make_image_bytes()
-    encoded = encode_image_lsb(cover_bytes, secret_bytes)
-    assert encoded[:8] == b'\x89PNG\r\n\x1a\n', "Output should be PNG"
+def test_file_text_roundtrip():
+    cover_bytes = _make_image_bytes(size=(200, 200))
+    secret_data = b"Hello, this is a secret text file!\nLine 2 here."
+    filename    = "secret.txt"
+
+    encoded = encode_file_in_image(cover_bytes, secret_data, filename)
+    file_out, name_out = decode_file_from_image(encoded)
+
+    assert name_out == filename,    f"Filename mismatch: {name_out!r}"
+    assert file_out == secret_data, f"Data mismatch:\n{file_out!r}\nvs\n{secret_data!r}"
 
 
-def test_image_cover_visually_unchanged():
-    """Ensure cover pixel's top nibble is preserved."""
-    cover_bytes  = _make_image_bytes(color=(160, 80, 240))
-    secret_bytes = _make_image_bytes(color=(0, 0, 0))
+def test_file_binary_roundtrip():
+    cover_bytes = _make_image_bytes(size=(300, 300))
+    # Simulate binary file (e.g. small PNG header bytes)
+    secret_data = bytes(range(256)) * 4   # 1024 random-ish bytes
+    filename    = "data.bin"
 
-    encoded = encode_image_lsb(cover_bytes, secret_bytes)
-    img = Image.open(io.BytesIO(encoded)).convert("RGB")
-    px = img.getpixel((10, 10))
+    encoded = encode_file_in_image(cover_bytes, secret_data, filename)
+    file_out, name_out = decode_file_from_image(encoded)
 
-    # Top 4 bits of 160 = 0xA0 = 160; secret is 0 so lower nibble = 0
-    assert px[0] == 160, f"Red channel top nibble changed: {px[0]}"
-    assert px[1] == 80,  f"Green channel top nibble changed: {px[1]}"
-    # 0xF0 = 240 → stays 240, but actual is 240 not 0xF0 ... Pillow stores 0–255 integers.
-    # 240 & 0xF0 = 240; secret=0 → (240 & 0xF0) | 0 = 240
-    assert px[2] == 240, f"Blue channel top nibble changed: {px[2]}"
+    assert name_out == filename,    f"Filename mismatch: {name_out!r}"
+    assert file_out == secret_data, "Binary data roundtrip failed"
 
 
-# ── Run all ────────────────────────────────────────────────────────────────
+def test_file_unicode_filename():
+    cover_bytes = _make_image_bytes(size=(200, 200))
+    secret_data = b"test content"
+    filename    = "secret_файл.txt"
+
+    encoded = encode_file_in_image(cover_bytes, secret_data, filename)
+    file_out, name_out = decode_file_from_image(encoded)
+    assert name_out == filename, f"Unicode filename mismatch: {name_out!r}"
+    assert file_out == secret_data
+
+
+def test_file_too_large_raises():
+    # 10x10 image → capacity = 10 * 10 * 3 * 2 / 8 = 75 bytes
+    cover_bytes = _make_image_bytes(size=(10, 10))
+    huge_data   = b"x" * 1000   # definitely too large
+    try:
+        encode_file_in_image(cover_bytes, huge_data, "big.bin")
+        raise AssertionError("Should have raised ValueError for oversized file")
+    except ValueError as e:
+        assert "too large" in str(e).lower(), f"Wrong error message: {e}"
+
+
+def test_encoded_output_is_png():
+    cover_bytes = _make_image_bytes(size=(200, 200))
+    encoded     = encode_file_in_image(cover_bytes, b"test", "t.txt")
+    assert encoded[:8] == b'\x89PNG\r\n\x1a\n', "Output should be a valid PNG"
+
+
+def test_cover_barely_altered():
+    """
+    2-bit LSB: the cover channel value can change by at most 3.
+    Verify that pixel values are close to the original.
+    """
+    cover_bytes = _make_image_bytes(color=(128, 64, 200), size=(100, 100))
+    encoded     = encode_file_in_image(cover_bytes, b"tiny", "t.txt")
+
+    orig = Image.open(io.BytesIO(cover_bytes)).convert("RGB")
+    enc  = Image.open(io.BytesIO(encoded)).convert("RGB")
+
+    for (or_, og, ob), (er, eg, eb) in zip(orig.getdata(), enc.getdata()):
+        assert abs(or_ - er) <= 3, f"R channel changed too much: {or_} → {er}"
+        assert abs(og - eg) <= 3, f"G channel changed too much: {og} → {eg}"
+        assert abs(ob - eb) <= 3, f"B channel changed too much: {ob} → {eb}"
+
+
+def test_invalid_image_raises():
+    bad_bytes = b"This is not an image at all."
+    try:
+        decode_file_from_image(bad_bytes)
+        raise AssertionError("Should have raised on invalid image")
+    except Exception:
+        pass   # Any exception is acceptable — cannot decode a non-image
+
+
+# ── Run ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print("\n=== StegoVault Logic Tests ===\n")
 
-    run("Text: basic roundtrip",          test_text_basic_roundtrip)
-    run("Text: unicode secret roundtrip", test_text_unicode_secret)
-    run("Text: cover text preserved",     test_text_cover_preserved)
-    run("Text: empty cover raises",       test_text_empty_cover_raises)
-    run("Text: no hidden msg raises",     test_text_no_hidden_message)
-    run("Image: encode/decode roundtrip", test_image_encode_decode_roundtrip)
-    run("Image: output is PNG",           test_image_output_is_png)
-    run("Image: cover visually preserved",test_image_cover_visually_unchanged)
+    print("Text Steganography")
+    print("──────────────────")
+    run("Basic text roundtrip",          test_text_basic_roundtrip)
+    run("Unicode secret roundtrip",      test_text_unicode_secret)
+    run("Cover text preserved",          test_text_cover_preserved)
+    run("Empty cover raises ValueError", test_text_empty_cover_raises)
+    run("No hidden message raises",      test_text_no_hidden_message)
 
-    print(f"\n{'All tests passed!' if errors == 0 else f'{errors} test(s) failed.'}\n")
+    print("\nFile-in-Image Steganography (2-bit LSB)")
+    print("────────────────────────────────────────")
+    run("Capacity calculation",          test_capacity_function)
+    run("Text file roundtrip",           test_file_text_roundtrip)
+    run("Binary file roundtrip",         test_file_binary_roundtrip)
+    run("Unicode filename roundtrip",    test_file_unicode_filename)
+    run("Oversized file raises",         test_file_too_large_raises)
+    run("Output is valid PNG",           test_encoded_output_is_png)
+    run("Cover pixels barely altered",   test_cover_barely_altered)
+    run("Invalid image raises error",    test_invalid_image_raises)
+
+    total    = 13
+    passed   = total - errors
+    verdict  = f"{GREEN}All {total} tests passed!{RESET}" if errors == 0 \
+               else f"{RED}{errors} test(s) failed.{RESET}"
+    print(f"\n{verdict}\n")
     sys.exit(0 if errors == 0 else 1)
