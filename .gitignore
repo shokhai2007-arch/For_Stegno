@@ -26,3 +26,9 @@ secret_decoded.*
 # OS
 .DS_Store
 Thumbs.db
+
+# JetBrains / IDE
+.idea/
+*.iml
+*.iws
+/out/
