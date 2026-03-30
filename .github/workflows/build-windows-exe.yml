@@ -76,6 +76,6 @@ jobs:
           files: dist/StegoVault.exe
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

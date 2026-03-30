@@ -204,6 +204,6 @@ def api_image_decode():
 if __name__ == "__main__":
     # In 'Onefile' frozen mode, automatically open the browser
     if getattr(sys, 'frozen', False):
-        webbrowser.open("http://127.0.0.1:5000")
+        webbrowser.open("http://127.0.0.1:9001")
     
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=9001)
