@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+echo "Stopping StegoVault service before removal..."
+
+# Agar xizmat ishlayotgan bo'lsa, to'xtatish
+if systemctl is-active --quiet stegovault; then
+    systemctl stop stegovault.service
+fi
+
+# Agar xizmat avtomatik ishga tushadigan bo'lsa, disable qilish
+if systemctl is-enabled --quiet stegovault; then
+    systemctl disable stegovault.service
+fi
+
+# Xizmat faylini o'chirish
+rm -f /etc/systemd/system/stegovault.service
+
+echo "Removing StegoVault application files..."
+
+# Dastur papkasini butunlay o'chirish
+rm -rf /opt/stegovault
+
+# Launcher faylini o'chirish
+rm -f /usr/local/bin/stegovault-launcher
+
+echo "StegoVault removal completed."
+
+exit 0

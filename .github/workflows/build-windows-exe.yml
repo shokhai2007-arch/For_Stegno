@@ -1,0 +1,79 @@
+name: Build Windows EXE Professional
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build StegoVault EXE
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      - name: Generate Windows Icon
+        shell: python
+        run: |
+          import os
+          from PIL import Image
+          
+          # Source logo path
+          logo_path = 'static/image/logo.png'
+          if os.path.exists(logo_path):
+              img = Image.open(logo_path)
+              # Generate an ICO with multiple sizes for Windows Explorer
+              img.save('logo.ico', format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
+              print("logo.ico generated successfully.")
+          else:
+              print(f"Warning: {logo_path} not found. Build may fail or use default icon.")
+
+      - name: Build Standalone EXE
+        run: |
+          # We use the provided .spec file for advanced bundling options
+          pyinstaller --clean stegovault.spec
+
+      - name: Test EXE Existence
+        shell: pwsh
+        run: |
+          if (Test-Path "dist/StegoVault.exe") {
+            Write-Host "Success: Executable found at dist/StegoVault.exe"
+          } else {
+            Write-Host "Error: Executable NOT found!"
+            exit 1
+          }
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StegoVault-Windows
+          path: dist/StegoVault.exe
+          retention-days: 5
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: StegoVault Release ${{ github.ref_name }}
+          files: dist/StegoVault.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

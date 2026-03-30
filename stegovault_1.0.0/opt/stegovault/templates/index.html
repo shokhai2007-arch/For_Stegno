@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StegoVault — Hidden in Plain Sight</title>
+  <meta name="description"
+    content="Hide secret messages inside plain text or any file inside an image using Zero-width and 2-bit LSB steganography." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="icon" href="{{ url_for('static', filename='image/logo.png') }}" />
+</head>
+
+<body>
+  <!-- ─── Background Orbs ─────────────────────────────────────────────── -->
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- ─── Header ──────────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="header-inner container">
+      <div class="logo">
+        <img src="{{ url_for('static', filename='image/logo.png') }}" alt="StegoVault" class="logo-img" />
+        <span class="logo-text">Stego<strong>Vault</strong></span>
+      </div>
+      <p class="logo-tagline">Hidden in plain sight</p>
+    </div>
+  </header>
+
+  <!-- ─── Main ────────────────────────────────────────────────────────── -->
+  <main class="container main-content">
+
+    <!-- Tab Bar -->
+    <nav class="tab-bar" role="tablist" aria-label="Steganography mode">
+      <button id="tab-text" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-text"
+        data-panel="text">
+        <span class="tab-icon">✦</span> Text
+      </button>
+      <button id="tab-image" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-image"
+        data-panel="image">
+        <span class="tab-icon">◈</span> Image
+      </button>
+    </nav>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         TEXT PANEL
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="panel-text" class="panel active" role="tabpanel" aria-labelledby="tab-text">
+
+      <!-- ENCODE -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><span class="chip chip-encode">ENCODE</span> Hide a Message in Text</h2>
+          <p class="card-desc">Your secret is woven invisibly into the cover text using <em>Zero-width Unicode
+              characters</em> — completely undetectable to the naked eye.</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="txt-cover" class="field-label">Cover Text <span class="required">*</span></label>
+            <textarea id="txt-cover" class="field-input textarea" rows="4"
+              placeholder="Enter any visible text that will carry the hidden message…"></textarea>
+          </div>
+          <div class="field">
+            <label for="txt-secret" class="field-label">Secret Message <span class="required">*</span></label>
+            <textarea id="txt-secret" class="field-input textarea" rows="4"
+              placeholder="The message to hide inside the cover text…"></textarea>
+          </div>
+        </div>
+
+        <button id="btn-text-encode" class="btn btn-primary">
+          <span class="btn-label">Encode &amp; Hide</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+
+        <div id="text-encode-result" class="result-box" hidden>
+          <div class="result-header">
+            <span class="result-label">Encoded Text (copy &amp; share):</span>
+            <button id="btn-copy-text" class="btn-icon" title="Copy to clipboard" aria-label="Copy encoded text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+          </div>
+          <pre id="text-encode-output" class="result-content"></pre>
+          <div id="copy-toast" class="toast" hidden>✓ Copied!</div>
+        </div>
+        <div id="text-encode-error" class="error-box" hidden></div>
+      </div>
+
+      <!-- DECODE -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><span class="chip chip-decode">DECODE</span> Reveal Hidden Message</h2>
+          <p class="card-desc">Paste text that may contain a hidden message. StegoVault will extract and reveal any
+            invisible content.</p>
+        </div>
+
+        <div class="field">
+          <label for="txt-encoded" class="field-label">Paste Encoded Text <span class="required">*</span></label>
+          <textarea id="txt-encoded" class="field-input textarea" rows="5"
+            placeholder="Paste the encoded text here — even if it looks normal…"></textarea>
+        </div>
+
+        <button id="btn-text-decode" class="btn btn-secondary">
+          <span class="btn-label">Decode &amp; Reveal</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+
+        <div id="text-decode-result" class="result-box" hidden>
+          <div class="result-header">
+            <span class="result-label">Secret Message Found:</span>
+          </div>
+          <pre id="text-decode-output" class="result-content"></pre>
+        </div>
+        <div id="text-decode-error" class="error-box" hidden></div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         IMAGE PANEL
+         ══════════════════════════════════════════════════════════════════ -->
+    <section id="panel-image" class="panel" role="tabpanel" aria-labelledby="tab-image" hidden>
+
+      <!-- ENCODE -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><span class="chip chip-encode">ENCODE</span> Hide a File inside an Image</h2>
+          <p class="card-desc">Using <em>2-bit LSB (Least Significant Bit)</em> embedding, any file — PDF, ZIP, MP3,
+            document — is hidden inside the cover image with imperceptible visual change.</p>
+        </div>
+
+        <div class="form-grid">
+          <!-- Cover Image -->
+          <div class="field">
+            <label for="img-cover" class="field-label">Cover Image <span class="required">*</span></label>
+            <div class="drop-zone" id="drop-cover" tabindex="0" role="button" aria-label="Upload cover image">
+              <div class="drop-inner" id="drop-cover-inner">
+                <span class="drop-icon">🖼️</span>
+                <span class="drop-text">Click or drag-and-drop</span>
+                <span class="drop-hint">PNG, JPG, BMP</span>
+              </div>
+              <img id="cover-preview" class="drop-preview" alt="Cover image preview" hidden />
+            </div>
+            <input id="img-cover" type="file" accept="image/*" class="sr-only" aria-label="Cover image file input" />
+            <!-- Capacity badge shown after image is selected -->
+            <div id="capacity-badge" class="capacity-badge" hidden>
+              <span class="cap-icon">💾</span>
+              <span id="capacity-text">Max capacity: —</span>
+            </div>
+          </div>
+
+          <!-- Secret File (any type) -->
+          <div class="field">
+            <label for="img-secret-file" class="field-label">Secret File <span class="required">*</span></label>
+            <div class="drop-zone" id="drop-secret" tabindex="0" role="button" aria-label="Upload secret file">
+              <div class="drop-inner" id="drop-secret-inner">
+                <span class="drop-icon">📄</span>
+                <span class="drop-text">Click or drag-and-drop</span>
+                <span class="drop-hint">Any file type — PDF, ZIP, MP3, TXT…</span>
+              </div>
+            </div>
+            <input id="img-secret-file" type="file" class="sr-only" aria-label="Secret file input" />
+            <!-- Selected file info pill -->
+            <div id="secret-file-info" class="file-pill" hidden>
+              <span class="file-pill-icon">📎</span>
+              <span id="secret-file-name" class="file-pill-name"></span>
+              <span id="secret-file-size" class="file-pill-size"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Size warning bar -->
+        <div id="size-warning" class="size-warning" hidden>
+          <span class="size-warning-icon">⚠️</span>
+          <span id="size-warning-text"></span>
+        </div>
+
+        <button id="btn-image-encode" class="btn btn-primary">
+          <span class="btn-label">Encode &amp; Download</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+
+        <div id="image-encode-result" class="result-box" hidden>
+          <div class="result-header">
+            <span class="result-label">Encoded Image (visually identical to cover):</span>
+            <button id="btn-download-encoded" class="btn-icon" title="Download encoded image"
+              aria-label="Download encoded image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
+          </div>
+          <img id="image-encode-output" class="result-img" alt="Encoded image result" />
+        </div>
+        <div id="image-encode-error" class="error-box" hidden></div>
+      </div>
+
+      <!-- DECODE -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><span class="chip chip-decode">DECODE</span> Extract Hidden File</h2>
+          <p class="card-desc">Upload a StegoVault-encoded PNG to extract the hidden file from its pixel data. The
+            original filename and type are fully preserved.</p>
+        </div>
+
+        <div class="field">
+          <label for="img-encoded" class="field-label">Encoded Image <span class="required">*</span></label>
+          <div class="drop-zone" id="drop-encoded" tabindex="0" role="button" aria-label="Upload encoded image">
+            <div class="drop-inner" id="drop-encoded-inner">
+              <span class="drop-icon">🔍</span>
+              <span class="drop-text">Click or drag-and-drop encoded image</span>
+              <span class="drop-hint">Must be a PNG produced by StegoVault</span>
+            </div>
+            <img id="encoded-preview" class="drop-preview" alt="Encoded image preview" hidden />
+          </div>
+          <input id="img-encoded" type="file" accept="image/png" class="sr-only"
+            aria-label="Encoded image file input" />
+        </div>
+
+        <button id="btn-image-decode" class="btn btn-secondary">
+          <span class="btn-label">Decode &amp; Reveal</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+
+        <div id="image-decode-result" class="result-box" hidden>
+          <div class="result-header">
+            <span class="result-label">Hidden File Recovered:</span>
+          </div>
+          <div id="file-recover-info" class="file-recover-card">
+            <div class="file-recover-icon">📦</div>
+            <div class="file-recover-meta">
+              <span id="recover-filename" class="recover-name"></span>
+              <span id="recover-size" class="recover-size"></span>
+            </div>
+            <button id="btn-download-decoded" class="btn btn-primary btn-sm">
+              <span class="btn-label">Download File</span>
+              <span class="btn-spinner" hidden></span>
+            </button>
+          </div>
+        </div>
+        <div id="image-decode-error" class="error-box" hidden></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── Footer ──────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>StegoVault &mdash; Steganography implemented manually, no black-box libraries.</p>
+      <p class="footer-tech">Zero-width Unicode &bull; 2-bit LSB &bull; Flask &bull; Pillow</p>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

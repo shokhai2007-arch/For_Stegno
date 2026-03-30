@@ -1,0 +1,18 @@
+#!/bin/bash
+# StegoVault Launcher script
+# Location: /usr/local/bin/stegovault-launcher
+
+# This script is designed to be called from the GUI (.desktop) without a terminal.
+# It ensures the service is running and opens the browser to the dashboard.
+
+# 1. Start service if it somehow stopped
+if ! systemctl is-active --quiet stegovault; then
+    # Try starting it (may require sudo, but usually active after install)
+    sudo systemctl start stegovault
+fi
+
+# 2. Open browser in a background process
+xdg-open http://localhost:9001 2>/dev/null &
+
+# 3. Exit immediately
+exit 0

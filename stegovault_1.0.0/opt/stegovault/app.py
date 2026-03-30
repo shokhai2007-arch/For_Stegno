@@ -1,10 +1,9 @@
 """
 Flask Application — StegoVault
 """
-import os
-import sys
-import webbrowser
-from flask import Flask, render_template, request, jsonify, abort
+import base64
+import mimetypes
+from flask import Flask, render_template, request, jsonify
 
 from logic import (
     encode_text_zero_width,
@@ -14,25 +13,14 @@ from logic import (
     image_capacity,
 )
 
+from flask import Flask, render_template, request, jsonify, abort
 import logging
-import base64
-import mimetypes
-
-# PyInstaller compatibility: Locate static/templates when bundled
-if getattr(sys, 'frozen', False):
-    base_path = sys._MEIPASS
-else:
-    base_path = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------------------------------------------------------------------
 # Setup & Config
 # ---------------------------------------------------------------------------
 
-app = Flask(
-    __name__,
-    template_folder=os.path.join(base_path, 'templates'),
-    static_folder=os.path.join(base_path, 'static')
-)
+app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB max upload
 
 # Configure basic logging to see server errors in console
@@ -202,8 +190,6 @@ def api_image_decode():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # In 'Onefile' frozen mode, automatically open the browser
-    if getattr(sys, 'frozen', False):
-        webbrowser.open("http://127.0.0.1:5000")
-    
-    app.run(host="0.0.0.0", port=5000)
+    import os
+    port = int(os.environ.get("PORT", 9001))
+    app.run(debug=False, host="0.0.0.0", port=port)

@@ -1,0 +1,10 @@
+Package: stegovault
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: StegoVault Team <shokhai2007@gmail.com>
+Depends: python3, python3-venv, python3-pip
+Description: Digital Steganography Vault (File-in-Image & Zero-Width Text)
+ A tool to hide any binary file within an image using 2-bit LSB steganography
+ and invisible text within messages using non-rendering Unicode characters.

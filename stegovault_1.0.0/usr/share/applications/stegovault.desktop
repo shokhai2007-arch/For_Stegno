@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=StegoVault
+Comment=Digital Steganography Vault (Text & File hiding)
+Exec=/usr/local/bin/stegovault-launcher
+Icon=stegovault
+Type=Application
+Terminal=false
+Categories=Utility;Security;
+Keywords=stego;crypt;hidden;
