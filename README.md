@@ -84,6 +84,4 @@ These characters are stitched into the visible "cover" text. They are invisible 
 ## ⚖️ License & Security
 
 This tool is intended for educational purposes. While steganography provides "security through obscurity," it does not replace encryption. For high-stakes security, always encrypt your files *before* hiding them.
-
----
-*Created with ❤️ by Antigravity AI.*
+The .sig digital signature ensures that the logo has not been modified and confirms its original source.
