@@ -20,11 +20,30 @@ Steganography Logic — Manual Implementation
    - Capacity: W × H × 3 channels × 2 bits  per pixel.
    - A ValueError is raised if the file exceeds capacity.
    - Output is always a lossless PNG.
+
+3. Audio Steganography: 1-bit LSB on WAV PCM samples
+   - Embeds data into the least significant bit of each audio sample.
+   - Supports 8-bit and 16-bit PCM WAV files.
+   - Header: [4 bytes] payload length (big-endian uint32)
+   - Output preserves the original WAV format parameters.
+
+4. Video Steganography: 1-bit LSB on video frame pixels
+   - Uses OpenCV to read/write video frames.
+   - Embeds data into the LSB of each pixel channel across frames.
+   - Header: [4 bytes] payload length (big-endian uint32)
+   - Output preserves the original codec/format.
 """
 
 from PIL import Image
+from pydub import AudioSegment
 import io
 import struct
+import wave
+import tempfile
+import os
+import cv2
+import numpy as np
+
 
 # ---------------------------------------------------------------------------
 # Zero-width character constants
@@ -267,3 +286,556 @@ def decode_file_from_image(encoded_bytes: bytes) -> tuple:
         return file_data, filename
     except (ValueError, struct.error, UnicodeDecodeError):
         raise ValueError("This image does not contain a valid or readable StegoVault hidden file.")
+
+
+# ---------------------------------------------------------------------------
+# Audio Steganography — 1-bit LSB on WAV PCM samples
+# ---------------------------------------------------------------------------
+
+
+def encode_audio_lsb(audio_bytes: bytes, secret_bytes: bytes, secret_filename: str) -> bytes:
+    buf_in = io.BytesIO(audio_bytes)
+    try:
+        wf_in = wave.open(buf_in, 'rb')
+    except Exception as e:
+        raise ValueError(f"WAV formatini o'qib bo'lmadi: {e}")
+
+    params = wf_in.getparams()
+    n_frames = wf_in.getnframes()
+    sampwidth = wf_in.getsampwidth()
+    raw_data = bytearray(wf_in.readframes(n_frames))
+    wf_in.close()
+
+    # Metadata tayyorlash (Fayl nomi)
+    name_bytes = secret_filename.encode('utf-8')
+    # Struktura: [Nom uzunligi (4b)] + [Nom] + [Fayl mazmuni]
+    full_payload = struct.pack(">I", len(name_bytes)) + name_bytes + secret_bytes
+
+    # Header: Umumiy payload uzunligi
+    header = struct.pack(">I", len(full_payload))
+    bits = _to_bits(header + full_payload)
+
+    total_samples = n_frames * params.nchannels
+    if len(bits) > total_samples:
+        raise ValueError("Audio hajmi kichiklik qiladi.")
+
+    # Kodlash - NumPy orqali tezkor (Vectorized)
+    arr = np.frombuffer(raw_data, dtype=np.uint8).copy()
+    bit_arr = np.array(bits, dtype=np.uint8)
+    
+    # Faqat kerakli namunalar (samples) ning LSB bitini o'zgartiramiz
+    # Sampwidth qadam bilan (masalan 16-bitda har 2-bayt)
+    target_indices = np.arange(0, len(bit_arr) * sampwidth, sampwidth)
+    arr[target_indices] = (arr[target_indices] & 0xFE) | bit_arr
+
+    buf_out = io.BytesIO()
+    with wave.open(buf_out, 'wb') as wf_out:
+        wf_out.setparams(params)
+        wf_out.writeframes(arr.tobytes())
+    return buf_out.getvalue()
+
+
+def decode_audio_lsb(audio_bytes: bytes):
+    buf_in = io.BytesIO(audio_bytes)
+    with wave.open(buf_in, 'rb') as wf_in:
+        sampwidth = wf_in.getsampwidth()
+        raw_data = wf_in.readframes(wf_in.getnframes())
+
+    # LSB bitlarni yig'ish - NumPy orqali juda tez
+    arr = np.frombuffer(raw_data, dtype=np.uint8)
+    # Sampwidth qadam bilan birinchi baytlarni (LSB) olamiz
+    lsb_bits = (arr[::sampwidth] & 1).astype(np.uint8).tolist()
+    bits = lsb_bits
+
+    # 1. Umumiy payload uzunligini o'qish (32 bit)
+    if len(bits) < 32: raise ValueError("Ma'lumot topilmadi.")
+    total_len = struct.unpack(">I", _bits_to_bytes(bits[:32]))[0]
+
+    # 2. To'liq payloadni olish
+    payload_bytes = _bits_to_bytes(bits[32:32 + total_len * 8])
+
+    # 3. Nom uzunligi va nomni ajratish
+    name_len = struct.unpack(">I", payload_bytes[:4])[0]
+    filename = payload_bytes[4:4 + name_len].decode('utf-8')
+
+    # 4. Asl fayl baytlari
+    secret_data = payload_bytes[4 + name_len:]
+
+    return secret_data, filename
+
+
+# ============================================================================
+# OPTIMIZED VIDEO STEGANOGRAPHY - GRAYSCALE + HIGH COMPRESSION
+# ============================================================================
+
+def _get_video_extension(filename: str) -> str:
+    _, ext = os.path.splitext(filename)
+    return ext.lower() if ext else '.avi'
+
+
+def convert_to_grayscale(input_path: str, output_path: str) -> str:
+    """Videoni grayscale ga o'tkazish (rangli ma'lumotni o'chirish)"""
+    cap = cv2.VideoCapture(input_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Grayscale uchun 1 kanal
+    fourcc = cv2.VideoWriter_fourcc(*'HFYU')  # Lossless YUV (grayscale)
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height), isColor=False)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        out.write(gray)
+
+    cap.release()
+    out.release()
+    return output_path
+
+
+def resize_video(input_path: str, output_path: str, max_width=640, max_height=480) -> str:
+    """Videoni kichraytirish (hajmni kamaytirish uchun)"""
+    cap = cv2.VideoCapture(input_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Aspect ratio saqlash
+    scale = min(max_width / original_width, max_height / original_height)
+    new_width = int(original_width * scale)
+    new_height = int(original_height * scale)
+
+    fourcc = cv2.VideoWriter_fourcc(*'HFYU')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (new_width, new_height), isColor=False)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (new_width, new_height))
+        out.write(resized)
+
+    cap.release()
+    out.release()
+    return output_path
+
+
+def encode_video_lsb_optimized(input_path: str, secret_bytes: bytes, output_path: str,
+                               frame_step=1, resize_to=None) -> str:
+    """
+    Optimallashtirilgan LSB kodlash - FIXED VERSION
+    """
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise ValueError("Video faylni ochib bo'lmadi")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 30.0  # Default
+
+    original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print(f"📹 Original video: {original_width}x{original_height}, {fps}fps")
+
+    # Kichraytirish
+    if resize_to:
+        width, height = resize_to
+    else:
+        width, height = original_width, original_height
+
+    # Payload tayyorlash
+    header = struct.pack(">I", len(secret_bytes))
+    payload = header + secret_bytes
+    bits = np.unpackbits(np.frombuffer(payload, dtype=np.uint8))
+    total_bits = len(bits)
+
+    print(f"📦 Ma'lumot: {len(secret_bytes)} bayt → {total_bits} bit")
+
+    # MUHIM: Turli kodeklarni sinab ko'rish (platformaga qarab)
+    codecs_to_try = [
+        ('FFV1', '.avi'),  # FFV1 lossless (eng yaxshi)
+        ('HFYU', '.avi'),  # Huffman YUV
+        ('PNG ', '.avi'),  # PNG har bir kadr
+        ('DIB ', '.avi'),  # Raw RGB
+        ('MJPG', '.avi'),  # MJPEG (near-lossless)
+    ]
+
+    writer = None
+    used_codec = None
+    used_ext = '.avi'
+
+    for codec, ext in codecs_to_try:
+        fourcc = cv2.VideoWriter_fourcc(*codec)
+        test_path = tempfile.NamedTemporaryFile(suffix=ext, delete=False).name
+        test_writer = cv2.VideoWriter(test_path, fourcc, fps, (width, height), isColor=False)
+
+        if test_writer.isOpened():
+            writer = test_writer
+            used_codec = codec
+            used_ext = ext
+            print(f"✅ Kodek ishlaydi: {codec}")
+            # Tozalash
+            test_writer.release()
+            os.unlink(test_path)
+            break
+        else:
+            test_writer.release()
+            os.unlink(test_path)
+            print(f"❌ Kodek ishlamadi: {codec}")
+
+    if not writer:
+        # Fallback: MJPEG (deyarli lossless)
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height), isColor=False)
+        used_codec = 'MJPG'
+        print(f"⚠️ Fallback kodek: MJPG")
+
+    bit_idx = 0
+    frame_num = 0
+    frames_modified = 0
+
+    # Kesh uchun bitlarni saqlash
+    frame_bits_cache = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Grayscale
+        if len(frame.shape) == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = frame
+
+        # Resize
+        if (width, height) != (original_width, original_height):
+            gray = cv2.resize(gray, (width, height))
+
+        # LSB yozish
+        should_modify = (frame_num % frame_step == 0) and bit_idx < total_bits
+
+        if should_modify:
+            flat = gray.ravel()
+            available_bits = flat.size
+            to_modify = min(total_bits - bit_idx, available_bits)
+
+            if to_modify > 0:
+                frame_bits = bits[bit_idx:bit_idx + to_modify]
+                flat[:to_modify] = (flat[:to_modify] & 0xFE) | frame_bits
+                bit_idx += to_modify
+                frames_modified += 1
+                gray = flat.reshape(gray.shape)
+
+                if frame_num < 5:  # Faqat birinchi 5 kadr uchun log
+                    print(f"✏️ Kadr {frame_num}: {to_modify} bit yozildi")
+
+        writer.write(gray)
+        frame_num += 1
+
+        if frame_num % 100 == 0:
+            print(f"📊 Qayta ishlandi: {frame_num} kadr, {bit_idx}/{total_bits} bit")
+
+        # Early stop
+        if bit_idx >= total_bits and frame_num > 10:
+            print(f"✅ Barcha ma'lumot yozildi! Davom etilmoqda...")
+
+    cap.release()
+    writer.release()
+
+    print(f"\n📊 STATISTIKA:")
+    print(f"   - Jami kadrlar: {frame_num}")
+    print(f"   - O'zgartirilgan kadrlar: {frames_modified}")
+    print(f"   - Yozilgan bitlar: {bit_idx}/{total_bits}")
+    print(f"   - Ishlatilgan kodek: {used_codec}")
+
+    # Faylni tekshirish
+    if os.path.exists(output_path):
+        file_size = os.path.getsize(output_path)
+        print(f"   - Chiqish fayl hajmi: {file_size / (1024 * 1024):.2f} MB")
+
+        # VideoCapture bilan tekshirish
+        test_cap = cv2.VideoCapture(output_path)
+        if test_cap.isOpened():
+            test_frames = int(test_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            print(f"   - VideoCapture kadrlar soni: {test_frames}")
+            test_cap.release()
+        else:
+            print(f"   ⚠️ OGOHLANTIRISH: Chiqish faylni VideoCapture ocholmayapti!")
+    else:
+        print(f"   ❌ XATO: Chiqish fayl yaratilmadi!")
+
+    return output_path
+
+
+def decode_video_lsb_optimized(input_path: str, frame_step=1) -> bytes:
+    """Optimallashtirilgan dekodlash - FIXED VERSION"""
+
+    # Avval faylni tekshirish
+    if not os.path.exists(input_path):
+        raise ValueError(f"Fayl topilmadi: {input_path}")
+
+    print(f"🔓 Dekodlash boshlandi: {input_path}")
+    print(f"   Fayl hajmi: {os.path.getsize(input_path) / 1024:.2f} KB")
+
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        # Kodek haqida ma'lumot olish
+        print("❌ VideoCapture ochilmadi!")
+        print("   Mumkin sabablar:")
+        print("   1. Video fayl buzuq")
+        print("   2. Kodek qo'llab-quvvatlanmaydi")
+        print("   3. Fayl formati noto'g'ri")
+
+        # Fallback: ffmpeg bilan o'qish (agar mavjud bo'lsa)
+        try:
+            import subprocess
+            print("🔄 ffmpeg bilan o'qishga urinish...")
+            result = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=width,height',
+                                     '-of', 'default=noprint_wrappers=1', input_path],
+                                    capture_output=True, text=True)
+            if result.returncode == 0:
+                print("✅ ffmpeg faylni taniydi")
+            else:
+                print("❌ ffmpeg ham o'qiy olmadi")
+        except:
+            pass
+
+        raise ValueError("Video faylni ochib bo'lmadi. Fayl buzuq yoki kodek qo'llab-quvvatlanmaydi.")
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print(f"📹 Video ma'lumotlari:")
+    print(f"   - Kadrlar soni: {total_frames}")
+    print(f"   - O'lcham: {width}x{height}")
+    print(f"   - FPS: {fps}")
+
+    if total_frames == 0:
+        cap.release()
+        raise ValueError("VideoCapture kadrlarni o'qiy olmadi! Fayl formati noto'g'ri.")
+
+    all_bits = []
+    header_read = False
+    payload_len = 0
+    needed_bits = 32
+    frame_num = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Grayscale o'qish
+        if len(frame.shape) == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = frame
+
+        if frame_num % frame_step == 0:
+            bits = (gray.ravel() & 1).astype(np.uint8)
+            all_bits.extend(bits)
+
+            # Header o'qish
+            if not header_read and len(all_bits) >= 32:
+                header_bytes = np.packbits(all_bits[:32]).tobytes()
+                payload_len = struct.unpack(">I", header_bytes)[0]
+                print(f"📦 Header: payload_len = {payload_len} bayt")
+
+                if payload_len <= 0 or payload_len > 100 * 1024 * 1024:
+                    raise ValueError(f"Yashirin ma'lumot topilmadi (payload_len={payload_len})")
+
+                needed_bits = 32 + (payload_len * 8)
+                header_read = True
+                print(f"🎯 Kerak: {needed_bits} bit, Har bir kadr: {gray.size} bit")
+
+        if header_read and len(all_bits) >= needed_bits:
+            print(f"✅ Yetarli bit: {len(all_bits)}/{needed_bits}")
+            break
+
+        frame_num += 1
+        if frame_num % 100 == 0:
+            print(f"📖 O'qildi: {frame_num}/{total_frames} kadr, {len(all_bits)} bit")
+
+    cap.release()
+
+    if not header_read:
+        raise ValueError(f"Header o'qilmadi! Jami: {len(all_bits)} bit, Kerak: 32")
+
+    if len(all_bits) < needed_bits:
+        raise ValueError(f"Ma'lumot to'liq emas! Bor: {len(all_bits)}, Kerak: {needed_bits}")
+
+    data_bits = all_bits[32:needed_bits]
+    result = np.packbits(data_bits).tobytes()
+    print(f"✨ Tiklandi: {len(result)} bayt")
+
+    return result
+
+# def encode_video_lsb(video_bytes: bytes, secret_bytes: bytes,
+#                      filename: str = "video.avi",
+#                      progress_cb=None) -> bytes:
+#
+#
+#
+#     ext = _get_video_extension(filename)
+#     tmp_in = None
+#     tmp_out = None
+#
+#     try:
+#         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+#             f.write(video_bytes)
+#             tmp_in = f.name
+#
+#         cap = cv2.VideoCapture(tmp_in)
+#         if not cap.isOpened():
+#             raise ValueError("Video faylni ochib bo'lmadi.")
+#
+#         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+#         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+#         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+#         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#
+#         # Payload: [Header: 4 byte] + [Data]
+#         header = struct.pack(">I", len(secret_bytes))
+#         payload = header + secret_bytes
+#         bits = _to_bits(payload)
+#         total_bits = len(bits)
+#
+#         # MUHIM: Lossless AVI fayl yaratish
+#         # 'png ' (bo'sh joy bilan) kadrlarni yo'qotishsiz saqlaydi
+#         with tempfile.NamedTemporaryFile(suffix='.avi', delete=False) as f:
+#             tmp_out = f.name
+#
+#         # Kodeklar navbati: png (lossless), HFYU (lossless), DIB (raw)
+#         codecs = ['png ', 'HFYU', 'DIB ']
+#         writer = None
+#         for c in codecs:
+#             fourcc = cv2.VideoWriter_fourcc(*c)
+#             writer = cv2.VideoWriter(tmp_out, fourcc, fps, (width, height))
+#             if writer.isOpened():
+#                 break
+#
+#         if not writer or not writer.isOpened():
+#             raise ValueError("Tizimda lossless video kodek (PNG/HFYU) topilmadi.")
+#
+#         bit_idx = 0
+#         frame_num = 0
+#
+#         while True:
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+#
+#             if frame_num % 10 == 0 and bit_idx < total_bits:
+#                 # NumPy orqali massivga bitlarni yozish (tezkor)
+#                 flat = frame.ravel()
+#                 to_modify = min(total_bits - bit_idx, flat.size)
+#
+#                 # Shu kadr uchun bitlarni olamiz
+#                 frame_bits = np.array(bits[bit_idx:bit_idx + to_modify], dtype=np.uint8)
+#
+#                 # Kadr piksellarining LSB bitini o'zgartirish
+#                 flat[:to_modify] = (flat[:to_modify] & 0xFE) | frame_bits
+#                 bit_idx += to_modify
+#
+#                 frame = flat.reshape(frame.shape)
+#
+#             writer.write(frame)
+#             frame_num += 1
+#
+#             if progress_cb and total_frames > 0:
+#                 progress_cb(min(int(frame_num / total_frames * 100), 99))
+#
+#         cap.release()
+#         writer.release()
+#
+#         with open(tmp_out, 'rb') as f:
+#             return f.read()
+#
+#     finally:
+#         for p in [tmp_in, tmp_out]:
+#             if p and os.path.exists(p):
+#                 try:
+#                     os.unlink(p)
+#                 except:
+#                     pass
+
+#
+# def decode_video_lsb(video_bytes: bytes, filename: str = "video.avi",
+#                      progress_cb=None) -> bytes:
+#     import cv2
+#     import numpy as np
+#     import tempfile
+#     import os
+#     import struct
+#
+#     ext = _get_video_extension(filename)
+#     tmp_path = None
+#
+#     try:
+#         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+#             f.write(video_bytes)
+#             tmp_path = f.name
+#
+#         cap = cv2.VideoCapture(tmp_path)
+#         if not cap.isOpened():
+#             raise ValueError("Video faylni ochib bo'lmadi.")
+#
+#         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#
+#         all_bits = []
+#         header_read = False
+#         payload_len = 0
+#         needed_bits = 32
+#         frame_num = 0
+#
+#         while True:
+#             ret, frame = cap.read()
+#             if not ret:
+#                 break
+#
+#             if frame_num % 10 == 0:
+#                 # Tezlik uchun numpy raveldand foydalanamiz
+#                 flat = frame.ravel()
+#
+#                 # Har bir pikselning LSB bitini bittada olamiz
+#                 current_bits = (flat & 1).tolist()
+#                 all_bits.extend(current_bits)
+#
+#                 # Header hali o'qilmagan bo'lsa
+#                 if not header_read and len(all_bits) >= 32:
+#                     header_bytes = _bits_to_bytes(all_bits[:32])
+#                     payload_len = struct.unpack(">I", header_bytes)[0]
+#
+#                     # Tekshiruv: agar payload_len asossiz katta bo'lsa, demak ma'lumot yo'q
+#                     if payload_len <= 0 or payload_len > 100 * 1024 * 1024:  # 100MB limit
+#                         raise ValueError("Ushbu videoda yashirin ma'lumot topilmadi yoki u buzilgan.")
+#
+#                     needed_bits = 32 + (payload_len * 8)
+#                     header_read = True
+#
+#             if header_read and len(all_bits) >= needed_bits:
+#                 break
+#
+#             frame_num += 1
+#             if progress_cb and total_frames > 0:
+#                 progress_cb(min(int(frame_num / total_frames * 100), 99))
+#
+#         cap.release()
+#
+#         if not header_read or len(all_bits) < needed_bits:
+#             raise ValueError("Yashirin ma'lumotni to'liq o'qib bo'lmadi (Video kesilgan yoki siqilgan).")
+#
+#         data_bits = all_bits[32:needed_bits]
+#         return _bits_to_bytes(data_bits)
+#
+#     finally:
+#         if tmp_path and os.path.exists(tmp_path):
+#             os.unlink(tmp_path)

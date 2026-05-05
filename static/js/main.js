@@ -18,11 +18,22 @@ const $ = id => document.getElementById(id);
 function show(el) { el.hidden = false; }
 function hide(el) { el.hidden = true;  }
 
-function setLoading(btn, on) {
+/*function setLoading(btn, on) {
   btn.disabled = on;
   const label   = btn.querySelector('.btn-label');
   const spinner = btn.querySelector('.btn-spinner');
   on ? (hide(label), show(spinner)) : (show(label), hide(spinner));
+}*/
+
+// setLoading funksiyasini main.js da shunday tahrirlang (agar u yerda bo'lsa)
+function setLoading(btn, isLoading) {
+    if (!btn) return;
+    const label = btn.querySelector('.btn-label');
+    const spinner = btn.querySelector('.btn-spinner');
+
+    btn.disabled = isLoading;
+    if (label) label.hidden = isLoading;
+    if (spinner) spinner.hidden = !isLoading; // Spinner bo'lmasa xato bermaydi
 }
 
 function showError(boxId, msg) {
@@ -422,3 +433,532 @@ $('btn-download-decoded').addEventListener('click', () => {
     triggerDownload(recoveredFileDataUrl, recoveredFilename);
   }
 });
+
+/* ==========================================================================
+   AUDIO SECTION (ENCODE & DECODE) - FULL IMPLEMENTATION
+   ========================================================================== */
+
+/**
+ * Drop Zone va Inputni o'zaro bog'lash funksiyasi
+ */
+/*function setupAudioDropZone(zoneId, inputId, callback) {
+    const zone = $(zoneId);
+    const input = $(inputId);
+
+    if (!zone || !input) return;
+
+    // Zonaga bosilganda fayl tanlash oynasini ochish
+    zone.onclick = () => input.click();
+
+    // Fayl tanlanganda
+    input.onchange = () => {
+        if (input.files.length > 0) {
+            callback(input.files[0]);
+        }
+    };
+
+    // Drag & Drop hodisalari
+    zone.ondragover = (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+    };
+
+    zone.ondragleave = () => zone.classList.remove('dragover');
+
+    zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            // MUHIM: Drop qilingan faylni inputga biriktiramiz
+            input.files = e.dataTransfer.files;
+            callback(e.dataTransfer.files[0]);
+        }
+    };
+}
+
+// --- Audio Encode Drop Zones sozlash ---
+setupAudioDropZone('drop-audio-cover', 'audio-cover', file => {
+    const zone = $('drop-audio-cover');
+    zone.querySelector('.drop-text').textContent = file.name;
+    if (zone.querySelector('.drop-hint')) {
+        zone.querySelector('.drop-hint').textContent = fmtBytes(file.size);
+    }
+    zone.classList.add('has-file');
+});
+
+setupAudioDropZone('drop-audio-secret', 'audio-secret-file', file => {
+    const zone = $('drop-audio-secret');
+    zone.querySelector('.drop-text').textContent = file.name;
+    if (zone.querySelector('.drop-hint')) {
+        zone.querySelector('.drop-hint').textContent = fmtBytes(file.size);
+    }
+    zone.classList.add('has-file');
+});
+
+// --- Audio Decode Drop Zone sozlash ---
+setupAudioDropZone('drop-audio-encoded', 'audio-encoded', file => {
+    const zone = $('drop-audio-encoded');
+    zone.querySelector('.drop-text').textContent = file.name;
+    zone.classList.add('has-file');
+});
+
+/!**
+ * AUDIO ENCODE TUGMASI
+ *!/
+$('btn-audio-encode').onclick = async () => {
+    const btn = $('btn-audio-encode');
+    clearError('audio-encode-error');
+
+    const coverInput = $('audio-cover');
+    const secretInput = $('audio-secret-file');
+
+    // Tekshirish
+    if (!coverInput.files[0]) {
+        showError('audio-encode-error', 'Iltimos, Cover audio yuklang (WAV).');
+        return;
+    }
+    if (!secretInput.files[0]) {
+        showError('audio-encode-error', 'Iltimos, yashirmoqchi bo\'lgan faylni tanlang.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('cover', coverInput.files[0]);
+    fd.append('secret_file', secretInput.files[0]);
+
+    try {
+        setLoading(btn, true);
+        const data = await apiPost('/api/audio/encode', fd, false);
+
+        if (!data.ok) {
+            showError('audio-encode-error', data.error);
+        } else {
+            // Natijani yuklab olish
+            const audioUrl = `data:audio/wav;base64,${data.audio_b64}`;
+            triggerDownload(audioUrl, 'stego_audio_encoded.wav');
+        }
+    } catch (err) {
+        console.error("Encode Error:", err);
+        showError('audio-encode-error', "Serverga ulanishda xatolik yuz berdi.");
+    } finally {
+        setLoading(btn, false);
+    }
+};
+
+/!**
+ * AUDIO DECODE TUGMASI
+ *!/
+$('btn-audio-decode').onclick = async () => {
+    const btn = $('btn-audio-decode');
+    clearError('audio-decode-error');
+
+    const encodedInput = $('audio-encoded');
+
+    if (!encodedInput.files[0]) {
+        showError('audio-decode-error', 'Iltimos, ichida ma\'lumot yashirilgan WAV faylni yuklang.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('encoded', encodedInput.files[0]);
+
+    try {
+        setLoading(btn, true);
+        console.log("Decoding so'rovi yuborilmoqda...");
+
+        const data = await apiPost('/api/audio/decode', fd, false);
+
+        if (!data.ok) {
+            showError('audio-decode-error', data.error);
+        } else {
+            // Yashirin faylni tiklash va yuklab olish
+            const fileUrl = `data:${data.mime};base64,${data.file_b64}`;
+            triggerDownload(fileUrl, data.filename || 'recovered_file');
+        }
+    } catch (err) {
+        console.error("Decode Error:", err);
+        showError('audio-decode-error', "Server bilan aloqa uzildi yoki xato yuz berdi.");
+    } finally {
+        setLoading(btn, false); // Tugmani har qanday holatda faollashtirish
+    }
+};*/
+
+/* ——————————————————————————————————————————————————————————————————————————
+   AUDIO SECTION (ENCODE & DECODE)
+   —————————————————————————————————————————————————————————————————————————— */
+
+// Audio Encode Drop Zones
+setupDropZone('drop-audio-cover', 'audio-cover', file => {
+    const zone = $('drop-audio-cover');
+    zone.querySelector('.drop-text').textContent = file.name;
+    zone.querySelector('.drop-hint').textContent = fmtBytes(file.size);
+    zone.classList.add('has-file');
+});
+
+setupDropZone('drop-audio-secret', 'audio-secret-file', file => {
+    const zone = $('drop-audio-secret');
+    zone.querySelector('.drop-text').textContent = file.name;
+    zone.querySelector('.drop-hint').textContent = fmtBytes(file.size);
+    zone.classList.add('has-file');
+});
+
+// Audio Encode Button
+$('btn-audio-encode').addEventListener('click', async () => {
+    clearError('audio-encode-error');
+    const coverInput = $('audio-cover');
+    const secretInput = $('audio-secret-file');
+
+    if (!coverInput.files[0]) { showError('audio-encode-error', 'Please upload a cover audio.'); return; }
+    if (!secretInput.files[0]) { showError('audio-encode-error', 'Please upload a secret file.'); return; }
+
+    const fd = new FormData();
+    fd.append('cover', coverInput.files[0]);
+    fd.append('secret_file', secretInput.files[0]);
+
+    setLoading($('btn-audio-encode'), true);
+    const data = await apiPost('/api/audio/encode', fd, false);
+    setLoading($('btn-audio-encode'), false);
+
+    if (!data.ok) { showError('audio-encode-error', data.error); return; }
+
+    // WAV natijani yuklab olish
+    const audioUrl = `data:audio/wav;base64,${data.audio_b64}`;
+    triggerDownload(audioUrl, 'stego_audio_encoded.wav');
+});
+
+// Audio Decode Drop Zone
+setupDropZone('drop-audio-encoded', 'audio-encoded', file => {
+    const zone = $('drop-audio-encoded');
+    zone.querySelector('.drop-text').textContent = file.name;
+    zone.classList.add('has-file');
+});
+
+
+
+
+// Audio Decode Button
+$('btn-audio-decode').addEventListener('click', async () => {
+    clearError('audio-decode-error');
+
+    const btn = $('btn-audio-decode');
+    const encodedInput = $('audio-encoded');
+
+    // Fayl mavjudligini tekshirish
+    if (!encodedInput.files || !encodedInput.files[0]) {
+        showError('audio-decode-error', 'Please upload encoded audio.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('encoded', encodedInput.files[0]);
+
+    try {
+        setLoading(btn, true);
+
+        const data = await apiPost('/api/audio/decode', fd, false);
+
+        if (!data.ok) {
+            showError('audio-decode-error', data.error);
+        } else {
+            const fileUrl = `data:${data.mime};base64,${data.file_b64}`;
+            triggerDownload(fileUrl, data.filename || 'recovered_file');
+        }
+    } catch (err) {
+        showError('audio-decode-error', "Server bilan aloqa uzildi.");
+    } finally {
+        setLoading(btn, false);
+    }
+});
+
+/* ==========================================================================
+   VIDEO SECTION (ENCODE & DECODE) - OPTIMIZED VERSION
+   ========================================================================== */
+
+// Video Encode Drop Zones
+setupDropZone('drop-video-cover', 'video-cover', file => {
+    const zone = $('drop-video-cover');
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = file.name;
+        zone.classList.add('has-file');
+    }
+});
+
+setupDropZone('drop-video-secret', 'video-secret-file', file => {
+    const zone = $('drop-video-secret');
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = file.name;
+        zone.classList.add('has-file');
+    }
+});
+
+// Video Encode Button (optimized with options)
+$('btn-video-encode').addEventListener('click', async () => {
+    const btn = $('btn-video-encode');
+    clearError('video-encode-error');
+
+    const coverInput = $('video-cover');
+    const secretInput = $('video-secret-file');
+
+    if (!coverInput.files[0] || !secretInput.files[0]) {
+        showError('video-encode-error', 'Iltimos, video va yashirin faylni yuklang.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('cover', coverInput.files[0]);
+    fd.append('secret_file', secretInput.files[0]);
+
+    // Qo'shimcha opsiyalar (foydalanuvchi tanlashi mumkin)
+    fd.append('frame_step', '5');  // har 5-kadr (tezlik va hajm uchun)
+    fd.append('resize', '640x480');  // kichraytirish (hajmni kamaytirish)
+
+    try {
+        setLoading(btn, true);
+        showProgress('video-encode-progress-container', 'Encoding (grayscale + optimized)...');
+
+        const response = await fetch('/api/video/encode', {
+            method: 'POST',
+            body: fd
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Server xatosi');
+        }
+
+        // Yuklab olish
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'stego_video.avi';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showSuccess('✅ Video kodlandi va yuklab olindi!');
+        hideProgress('video-encode-progress-container');
+
+    } catch (err) {
+        console.error(err);
+        showError('video-encode-error', err.message);
+        hideProgress('video-encode-progress-container');
+    } finally {
+        setLoading(btn, false);
+    }
+});
+
+// Video Decode Drop Zone
+setupDropZone('drop-video-encoded', 'video-encoded', file => {
+    const zone = $('drop-video-encoded');
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = file.name;
+        zone.classList.add('has-file');
+    }
+});
+
+// Video Decode Button (optimized)
+$('btn-video-decode').addEventListener('click', async () => {
+    const btn = $('btn-video-decode');
+    const progressContainer = $('video-decode-progress-container');
+    const progressFill = $('video-decode-progress');
+
+    clearError('video-decode-error');
+    hideProgress('video-decode-progress-container');
+
+    const encodedInput = $('video-encoded');
+    if (!encodedInput.files[0]) {
+        showError('video-decode-error', 'Iltimos, yashirilgan videoni yuklang.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('encoded', encodedInput.files[0]);
+
+    try {
+        setLoading(btn, true);
+        showProgress('video-decode-progress-container', 'Decoding video...');
+
+        // Progress simulyatsiyasi
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress = Math.min(progress + 10, 90);
+            if (progressFill) progressFill.style.width = `${progress}%`;
+        }, 300);
+
+        const response = await fetch('/api/video/decode', {
+            method: 'POST',
+            body: fd
+        });
+
+        clearInterval(progressInterval);
+
+        if (!response.ok) {
+            let errorMsg = 'Server xatosi';
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch(e) {}
+            throw new Error(errorMsg);
+        }
+
+        if (progressFill) progressFill.style.width = '100%';
+
+        // Yashirin faylni yuklab olish
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'recovered_file.bin';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setTimeout(() => {
+            hideProgress('video-decode-progress-container');
+            resetDropZone('drop-video-encoded', 'video-encoded');
+        }, 1500);
+
+    } catch (err) {
+        console.error("Video Decode Error:", err);
+        showError('video-decode-error', err.message || 'Xatolik yuz berdi');
+        hideProgress('video-decode-progress-container');
+    } finally {
+        setLoading(btn, false);
+    }
+});
+
+// Helper functions for progress and drop zones
+function showProgress(containerId, message) {
+    const container = $(containerId);
+    if (container) {
+        container.hidden = false;
+        const progressText = container.querySelector('.progress-text');
+        if (progressText && message) progressText.textContent = message;
+        const progressFill = container.querySelector('.progress-fill');
+        if (progressFill) progressFill.style.width = '0%';
+    }
+}
+
+function hideProgress(containerId) {
+    const container = $(containerId);
+    if (container) container.hidden = true;
+}
+
+function resetDropZone(zoneId, inputId) {
+    const zone = $(zoneId);
+    const input = $(inputId);
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = zoneId.includes('cover') ? 'Upload Video (MP4, AVI)' :
+                                                       (zoneId.includes('secret') ? 'File to hide' : 'Upload encoded Video');
+        zone.classList.remove('has-file');
+    }
+    if (input) input.value = '';
+}
+
+// Eski apiPost funksiyasiga ehtiyoj qolmadi, lekin boshqa sectionlar ishlatayotgan bo'lsa saqlang
+
+/*
+/!* ==========================================================================
+   VIDEO SECTION (ENCODE & DECODE)
+   ========================================================================== *!/
+
+// Video Encode Drop Zones
+setupDropZone('drop-video-cover', 'video-cover', file => {
+    const zone = $('drop-video-cover');
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = file.name;
+        zone.classList.add('has-file');
+    }
+});
+
+setupDropZone('drop-video-secret', 'video-secret-file', file => {
+    const zone = $('drop-video-secret');
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = file.name;
+        zone.classList.add('has-file');
+    }
+});
+
+// Video Encode Button
+$('btn-video-encode').addEventListener('click', async () => {
+    const btn = $('btn-video-encode');
+    clearError('video-encode-error');
+
+    const coverInput = $('video-cover');
+    const secretInput = $('video-secret-file');
+
+    if (!coverInput.files[0] || !secretInput.files[0]) {
+        showError('video-encode-error', 'Iltimos, video va yashirin faylni yuklang.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('cover', coverInput.files[0]);
+    fd.append('secret_file', secretInput.files[0]);
+
+    try {
+        setLoading(btn, true); // Tugmani bloklash va spinnerni ko'rsatish
+        console.log("Video encoding boshlandi, kuting...");
+
+        const data = await apiPost('/api/video/encode', fd, false);
+
+        if (!data.ok) {
+            showError('video-encode-error', data.error);
+        } else {
+            const videoUrl = `data:video/mp4;base64,${data.video_b64}`;
+            triggerDownload(videoUrl, 'stego_video_encoded.mp4');
+        }
+    } catch (err) {
+        console.error("Video Encode Error:", err);
+        showError('video-encode-error', 'Server bilan aloqa uzildi (Fayl juda kattami?).');
+    } finally {
+        setLoading(btn, false); // Har qanday holatda tugmani qaytarish
+    }
+});
+
+// Video Decode Drop Zone
+setupDropZone('drop-video-encoded', 'video-encoded', file => {
+    const zone = $('drop-video-encoded');
+    if (zone) {
+        zone.querySelector('.drop-text').textContent = file.name;
+        zone.classList.add('has-file');
+    }
+});
+
+// Video Decode Button
+$('btn-video-decode').addEventListener('click', async () => {
+    const btn = $('btn-video-decode');
+    clearError('video-decode-error');
+
+    const encodedInput = $('video-encoded');
+    if (!encodedInput.files[0]) {
+        showError('video-decode-error', 'Iltimos, ichida ma’lumot yashirilgan videoni yuklang.');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('encoded', encodedInput.files[0]);
+
+    try {
+        setLoading(btn, true);
+        console.log("Video decoding boshlandi...");
+
+        const data = await apiPost('/api/video/decode', fd, false);
+
+        if (!data.ok) {
+            showError('video-decode-error', data.error);
+        } else {
+            const fileUrl = `data:${data.mime};base64,${data.file_b64}`;
+            triggerDownload(fileUrl, data.filename || 'recovered_file');
+        }
+    } catch (err) {
+        console.error("Video Decode Error:", err);
+        showError('video-decode-error', 'Xatolik: Server javob bermadi.');
+    } finally {
+        setLoading(btn, false);
+    }
+});*/
+
