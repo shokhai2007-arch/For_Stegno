@@ -327,7 +327,26 @@
                 </div>
                 <span class="progress-text">Processing audio samples...</span>
             </div>
-            <div class="engine-badge">⚡ Optimized NumPy Engine</div>
+<!--            <div class="engine-badge">⚡ Optimized NumPy Engine</div>-->
+
+            <!-- Dekodlash natijasi — image decode paneli kabi -->
+            <div id="audio-decode-result" class="result-box" hidden>
+                <div class="result-header">
+                    <span class="result-label">Yashirin fayl tiklandi:</span>
+                </div>
+                <div id="audio-recover-info" class="file-recover-card">
+                    <div class="file-recover-icon">📎</div>
+                    <div class="file-recover-meta">
+                        <span id="audio-recover-filename" class="recover-name"></span>
+                        <span id="audio-recover-size" class="recover-size"></span>
+                    </div>
+                    <button id="btn-audio-download-decoded" class="btn btn-primary btn-sm">
+                        <span class="btn-label">Yuklab olish</span>
+                        <span class="btn-spinner" hidden></span>
+                    </button>
+                </div>
+            </div>
+
             <div id="audio-encode-error" class="error-box" hidden></div>
         </div>
 
@@ -394,6 +413,18 @@
                 </div>
             </div>
 
+            <!-- Sig'im badge: video yuklangandan so'ng avtomatik ko'rinadi -->
+            <div id="video-capacity-badge" class="capacity-badge" hidden>
+                <span class="cap-icon">📊</span>
+                <span id="video-capacity-text">Sig'im: ?</span>
+            </div>
+
+            <!-- Fayl juda katta bo'lsa ogohlantirish (image paneli kabi) -->
+            <div id="video-size-warning" class="size-warning" hidden>
+                <span class="size-warning-icon">⚠️</span>
+                <span id="video-size-warning-text"></span>
+            </div>
+
             <button id="btn-video-encode" class="btn btn-primary">
                 <span class="btn-label">Encode Video</span>
                 <span class="btn-spinner" hidden></span>
@@ -404,7 +435,7 @@
                 </div>
                 <span class="progress-text">Encoding frames (Lossless AVI)...</span>
             </div>
-            <div class="engine-badge">⚡ Optimized NumPy Engine</div>
+<!--            <div class="engine-badge">⚡ Optimized NumPy Engine</div>-->
             <div id="video-encode-error" class="error-box" hidden></div>
         </div>
 
@@ -430,6 +461,25 @@
                     <div id="video-decode-progress" class="progress-fill"></div>
                 </div>
             </div>
+
+            <!-- Dekodlash natijasi — image decode paneli kabi -->
+            <div id="video-decode-result" class="result-box" hidden>
+                <div class="result-header">
+                    <span class="result-label">Yashirin fayl tiklandi:</span>
+                </div>
+                <div id="video-recover-info" class="file-recover-card">
+                    <div class="file-recover-icon">📎</div>
+                    <div class="file-recover-meta">
+                        <span id="video-recover-filename" class="recover-name"></span>
+                        <span id="video-recover-size" class="recover-size"></span>
+                    </div>
+                    <button id="btn-video-download-decoded" class="btn btn-primary btn-sm">
+                        <span class="btn-label">Yuklab olish</span>
+                        <span class="btn-spinner" hidden></span>
+                    </button>
+                </div>
+            </div>
+
             <div id="video-decode-error" class="error-box" hidden></div>
         </div>
     </section>
