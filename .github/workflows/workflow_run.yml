@@ -15,7 +15,10 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const workflowsToWait = ["Build Linux Executable", "Build Windows EXE Professional"];
+            const workflowsToWait = [
+              "build-linux.yml",      # Use actual workflow filename
+              "build-windows.yml"     # Use actual workflow filename
+            ];
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
