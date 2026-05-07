@@ -472,8 +472,7 @@ def api_video_decode():
     mime, _ = mimetypes.guess_type(secret_filename)
     mime = mime or "application/octet-stream"
 
-    debug_secret(secret_data, secret_filename)
-    print(secret_data[:20])
+    # debug_secret(secret_data, secret_filename)
     # send_file with blokidan TASHQARIDA — stream muammosi yo'q
     return send_file(
         io.BytesIO(secret_data),

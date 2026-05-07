@@ -39,16 +39,6 @@
 <main class="container main-content">
 
     <!-- Tab Bar -->
-    <!--    <nav class="tab-bar" role="tablist" aria-label="Steganography mode">
-          <button id="tab-text" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-text"
-            data-panel="text">
-            <span class="tab-icon">✦</span> Text
-          </button>
-          <button id="tab-image" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-image"
-            data-panel="image">
-            <span class="tab-icon">◈</span> Image
-          </button>
-        </nav>-->
     <nav class="tab-bar" role="tablist" aria-label="Steganography mode">
         <button id="tab-text" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-text"
                 data-panel="text">
@@ -327,25 +317,6 @@
                 </div>
                 <span class="progress-text">Processing audio samples...</span>
             </div>
-<!--            <div class="engine-badge">⚡ Optimized NumPy Engine</div>-->
-
-            <!-- Dekodlash natijasi — image decode paneli kabi -->
-            <div id="audio-decode-result" class="result-box" hidden>
-                <div class="result-header">
-                    <span class="result-label">Yashirin fayl tiklandi:</span>
-                </div>
-                <div id="audio-recover-info" class="file-recover-card">
-                    <div class="file-recover-icon">📎</div>
-                    <div class="file-recover-meta">
-                        <span id="audio-recover-filename" class="recover-name"></span>
-                        <span id="audio-recover-size" class="recover-size"></span>
-                    </div>
-                    <button id="btn-audio-download-decoded" class="btn btn-primary btn-sm">
-                        <span class="btn-label">Yuklab olish</span>
-                        <span class="btn-spinner" hidden></span>
-                    </button>
-                </div>
-            </div>
 
             <div id="audio-encode-error" class="error-box" hidden></div>
         </div>
@@ -373,6 +344,25 @@
                     <div id="audio-decode-progress" class="progress-fill"></div>
                 </div>
             </div>
+
+            <!-- Dekodlash natijasi — image decode paneli kabi -->
+            <div id="audio-decode-result" class="result-box" hidden>
+                <div class="result-header">
+                    <span class="result-label">Yashirin fayl tiklandi:</span>
+                </div>
+                <div id="audio-recover-info" class="file-recover-card">
+                    <div class="file-recover-icon">📎</div>
+                    <div class="file-recover-meta">
+                        <span id="audio-recover-filename" class="recover-name"></span>
+                        <span id="audio-recover-size" class="recover-size"></span>
+                    </div>
+                    <button id="btn-audio-download-decoded" class="btn btn-primary btn-sm">
+                        <span class="btn-label">Yuklab olish</span>
+                        <span class="btn-spinner" hidden></span>
+                    </button>
+                </div>
+            </div>
+
             <div id="audio-decode-error" class="error-box" hidden></div>
         </div>
     </section>
