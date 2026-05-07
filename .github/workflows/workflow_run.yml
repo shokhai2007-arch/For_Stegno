@@ -4,57 +4,109 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: {} # manual ishga tushirish
+  workflow_dispatch: {}
 
 jobs:
-  wait-for-builds:
-    name: Wait for Linux & Windows Builds
+  build-linux:
+    name: Build Linux DEB
     runs-on: ubuntu-latest
     steps:
-      - name: Check other workflow runs
-        uses: actions/github-script@v7
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          script: |
-            const workflowsToWait = [
-              "build-linux.yml",      # Use actual workflow filename
-              "build-windows.yml"     # Use actual workflow filename
-            ];
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
+          python-version: '3.11'
+          cache: 'pip'
 
-            for (const workflowName of workflowsToWait) {
-              console.log(`Checking latest run for workflow: ${workflowName}`);
-              const runs = await github.rest.actions.listWorkflowRuns({
-                owner,
-                repo,
-                workflow_id: workflowName,
-                branch: "main",
-                status: "completed",
-                per_page: 1
-              });
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-tk libgl1 libglib2.0-0 ruby ruby-dev build-essential
 
-              if (!runs.data.workflow_runs.length) {
-                throw new Error(`No completed runs found for workflow ${workflowName}`);
-              }
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pillow
 
-              const latestRun = runs.data.workflow_runs[0];
-              console.log(`Latest run for ${workflowName} finished with conclusion: ${latestRun.conclusion}`);
+      - name: Generate Linux Icon
+        shell: python
+        run: |
+          import os
+          from PIL import Image
+          logo_path = 'static/image/logo.png'
+          if os.path.exists(logo_path):
+              img = Image.open(logo_path)
+              img.save('logo.png')
+          else:
+              print(f"Warning: {logo_path} not found.")
 
-              if (latestRun.conclusion !== "success") {
-                throw new Error(`Workflow ${workflowName} did not succeed. Conclusion: ${latestRun.conclusion}`);
-              }
-            }
+      - name: Build DEB package
+        run: |
+          mkdir -p dist
+          cp main.py dist/stegovault
+          chmod +x dist/stegovault
+          fpm -s dir -t deb -n stegovault -v 1.0.0 --prefix /usr/local/bin dist/stegovault
 
-  collect-artifacts:
-    name: Download Build Artifacts
-    runs-on: ubuntu-latest
-    needs: wait-for-builds
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: stegovault_*.deb
+          retention-days: 5
+
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
     steps:
-      - name: Download Windows Artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      - name: Generate Windows Icon
+        shell: python
+        run: |
+          import os
+          from PIL import Image
+          logo_path = 'static/image/logo.png'
+          if os.path.exists(logo_path):
+              img = Image.open(logo_path)
+              img.save('logo.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])
+          else:
+              print(f"Warning: {logo_path} not found.")
+
+      - name: Build EXE
+        run: pyinstaller --clean stegovault.spec
+
+      - name: Test EXE
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/StegoVault.exe")) { exit 1 }
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: dist/windows
+          path: dist/StegoVault.exe
+          retention-days: 5
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows]
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
@@ -62,22 +114,20 @@ jobs:
           name: linux-build
           path: dist/linux
 
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: collect-artifacts
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: dist/windows
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-
         with:
           name: Release ${{ github.ref_name }}
+          body_path: realise_note.md
           files: |
-            dist/windows/*
             dist/linux/*
+            dist/windows/*
           draft: false
           prerelease: false
         env:

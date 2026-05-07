@@ -2,26 +2,20 @@ name: Build Windows EXE Professional
 
 on:
   push:
-    branches: [ main ]
+    branches: [ windows-build ]
     tags:
       - 'windows_v*'
   workflow_dispatch: {}
 
 jobs:
-
-  checkout-repo:
-    name: Checkout Repository
+  build-windows-exe:
+    name: Build Windows EXE
     runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    permissions:
+      contents: write
 
-  setup-python:
-    name: Setup Python & Dependencies
-    runs-on: windows-latest
-    needs: checkout-repo
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
@@ -30,18 +24,13 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
-  generate-icon:
-    name: Generate Windows Icon
-    runs-on: windows-latest
-    needs: setup-python
-    steps:
-      - name: Generate ICO
+      - name: Generate Windows Icon
         shell: python
         run: |
           import os
@@ -54,20 +43,10 @@ jobs:
           else:
               print(f"Warning: {logo_path} not found.")
 
-  build-exe:
-    name: Build Standalone EXE
-    runs-on: windows-latest
-    needs: generate-icon
-    steps:
-      - name: Build EXE
+      - name: Build Standalone EXE
         run: pyinstaller --clean stegovault.spec
 
-  test-exe:
-    name: Test EXE Existence
-    runs-on: windows-latest
-    needs: build-exe
-    steps:
-      - name: Check EXE
+      - name: Test EXE Existence
         shell: pwsh
         run: |
           if (Test-Path "dist/StegoVault.exe") {
@@ -77,14 +56,9 @@ jobs:
             exit 1
           }
 
-  upload-artifact:
-    name: Upload Build Artifact
-    runs-on: windows-latest
-    needs: test-exe
-    steps:
-      - name: Upload EXE Artifact
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-build
+          name: StegoVault-Windows
           path: dist/StegoVault.exe
           retention-days: 5
