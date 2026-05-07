@@ -2,7 +2,7 @@ name: Build Linux DEB Package
 
 on:
   push:
-    branches: [ linux-build ]
+    branches: [ main ]
     tags:
       - 'linux_v*'
   workflow_dispatch: {}
@@ -11,10 +11,14 @@ jobs:
   build-deb:
     name: Build Linux DEB Package
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: write
 
-      - name: Set up Python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -24,57 +28,49 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y python3-tk libgl1 libglib2.0-0 ruby ruby-dev build-essential
-          sudo gem install fpm
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pillow fpm
 
-      - name: Prepare Package Structure
+      - name: Prepare package structure
         run: |
-          # Paket ichidagi papkalarni yaratish
           mkdir -p package/usr/share/stegovault
           mkdir -p package/usr/bin
           mkdir -p package/usr/share/applications
 
-          # Loyiha fayllarini nusxalash
-          cp -r . package/usr/share/stegovault/
+          # Loyiha fayllarini nusxalash, package papkasini chiqarib tashlab
+          rsync -av --exclude='package' ./ package/usr/share/stegovault/
 
-          # Ishga tushiruvchi wrapper script yaratish
+          # Wrapper script
           echo '#!/bin/bash' > package/usr/bin/stegovault
           echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> package/usr/bin/stegovault
           chmod +x package/usr/bin/stegovault
 
-      - name: Create Desktop Entry
-        run: |
-          # Ilovalar menyusida ko'rinishi uchun .desktop fayli
+          # Desktop entry
           cat <<EOF > package/usr/share/applications/stegovault.desktop
           [Desktop Entry]
           Name=StegoVault
-          Comment=Steganography tool for secure data hiding
+          Comment=Digital Steganography Vault
           Exec=/usr/bin/stegovault
           Icon=/usr/share/stegovault/static/image/logo.png
           Terminal=false
           Type=Application
-          Categories=Utility;Security;
+          Categories=Utility;
           EOF
 
       - name: Build DEB package
         run: |
-          fpm -s dir -t deb \
-            -n stegovault \
-            -v 1.0.0 \
-            -C package \
-            -p stegovault_1.0.0_amd64.deb \
-            --depends python3 \
-            --depends python3-tk \
-            --description "StegoVault - Image Steganography tool" \
-            usr/bin usr/share/stegovault usr/share/applications
+          fpm -s dir -t deb -n stegovault -v 1.0.0 \
+              --prefix /usr \
+              -C package \
+              usr/bin usr/share
 
-      - name: Upload Linux Artifact
+      - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-build
-          path: "*.deb"
+          name: StegoVault-Linux-DEB
+          path: stegovault_*.deb
           retention-days: 5
