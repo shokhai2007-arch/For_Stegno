@@ -1,12 +1,15 @@
 name: Main Release Workflow
 
 permissions:
-  contents: read
+  contents: write
 
 on:
   push:
     branches:
       - main
+    tags-ignore:
+      - 'linux_v*'
+      - 'windows_v*'
   workflow_dispatch: {}
 
 jobs:
@@ -33,30 +36,52 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generate Linux Icon
-        shell: python
+      - name: Prepare Package Structure
         run: |
-          import os
-          from PIL import Image
-          logo_path = 'static/image/logo.png'
-          if os.path.exists(logo_path):
-              img = Image.open(logo_path)
-              img.save('logo.png')
-          else:
-              print(f"Warning: {logo_path} not found.")
+          # Paket ichidagi papkalarni yaratish
+          mkdir -p package/usr/share/stegovault
+          mkdir -p package/usr/bin
+          mkdir -p package/usr/share/applications
+
+          # Loyiha fayllarini nusxalash
+          cp -r . package/usr/share/stegovault/
+
+          # Ishga tushiruvchi wrapper script yaratish
+          echo '#!/bin/bash' > package/usr/bin/stegovault
+          echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> package/usr/bin/stegovault
+          chmod +x package/usr/bin/stegovault
+
+      - name: Create Desktop Entry
+        run: |
+          # Ilovalar menyusida ko'rinishi uchun .desktop fayli
+          cat <<EOF > package/usr/share/applications/stegovault.desktop
+          [Desktop Entry]
+          Name=StegoVault
+          Comment=Steganography tool for secure data hiding
+          Exec=/usr/bin/stegovault
+          Icon=/usr/share/stegovault/static/image/logo.png
+          Terminal=false
+          Type=Application
+          Categories=Utility;Security;
+          EOF
 
       - name: Build DEB package
         run: |
-          mkdir -p dist
-          cp app.py dist/stegovault
-          chmod +x dist/stegovault
-          fpm -s dir -t deb -n stegovault -v 1.0.0 --prefix /usr/local/bin dist/stegovault
+          fpm -s dir -t deb \
+            -n stegovault \
+            -v 1.0.0 \
+            -C package \
+            -p stegovault_1.0.0_amd64.deb \
+            --depends python3 \
+            --depends python3-tk \
+            --description "StegoVault - Image Steganography tool" \
+            usr/bin usr/share/stegovault usr/share/applications
 
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: stegovault_*.deb
+          path: "*.deb"
           retention-days: 5
 
   build-windows:
@@ -92,16 +117,11 @@ jobs:
       - name: Build EXE
         run: pyinstaller --clean stegovault.spec
 
-      - name: Test EXE
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "dist/StegoVault.exe")) { exit 1 }
-
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: dist/StegoVault.exe
+          path: dist/*.exe
           retention-days: 5
 
   create-release:
@@ -113,8 +133,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Check if tag exists
         id: check_tag
@@ -129,19 +147,11 @@ jobs:
             echo "tag_name=$TAG" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download Linux Artifact
+      - name: Download Artifacts
         if: steps.check_tag.outputs.skip_release == 'false'
         uses: actions/download-artifact@v4
         with:
-          name: linux-build
-          path: dist/linux
-
-      - name: Download Windows Artifact
-        if: steps.check_tag.outputs.skip_release == 'false'
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-build
-          path: dist/windows
+          path: dist
 
       - name: Create GitHub Release
         if: steps.check_tag.outputs.skip_release == 'false'
@@ -149,10 +159,9 @@ jobs:
         with:
           tag_name: ${{ steps.check_tag.outputs.tag_name }}
           name: Release ${{ steps.check_tag.outputs.tag_name }}
-          body_path: realise_note.md
           files: |
-            dist/linux/*
-            dist/windows/*
+            dist/linux-build/*.deb
+            dist/windows-build/*.exe
           draft: false
           prerelease: false
         env:
