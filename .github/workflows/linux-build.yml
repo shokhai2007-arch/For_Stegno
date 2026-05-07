@@ -35,49 +35,47 @@ jobs:
           pip install -r requirements.txt
           pip install pillow fpm
 
-      - name: Prepare package structure
+      - name: Prepare Package Structure
         run: |
-          mkdir -p package/usr/share/stegovault
-          mkdir -p package/usr/bin
-          mkdir -p package/usr/share/applications
+          # 1. Toza va vaqtinchalik papka yaratamiz (loyiha ichida emas)
+          mkdir -p ../package/usr/share/stegovault
+          mkdir -p ../package/usr/bin
+          mkdir -p ../package/usr/share/applications
 
-          # Loyiha fayllarini nusxalash, package papkasini chiqarib tashlab
-          rsync -av --exclude='package' ./ package/usr/share/stegovault/
+          # 2. Hamma fayllarni nusxalash (faqat kerakli qismlarni)
+          # 'package' papkasini o'z ichiga olmasligi uchun 'cp' buyrug'ini to'g'ri beramiz
+          cp -r . ../package/usr/share/stegovault/
+          
+          # Keraksiz git va vaqtinchalik fayllarni o'chirib tashlaymiz (ixtiyoriy, lekin tavsiya etiladi)
+          rm -rf ../package/usr/share/stegovault/.git
+          rm -rf ../package/usr/share/stegovault/.github
 
-          # Wrapper script
-          echo '#!/bin/bash' > package/usr/bin/stegovault
-          echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> package/usr/bin/stegovault
-          chmod +x package/usr/bin/stegovault
+          # 3. Wrapper script yaratish
+          echo '#!/bin/bash' > ../package/usr/bin/stegovault
+          echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> ../package/usr/bin/stegovault
+          chmod +x ../package/usr/bin/stegovault
 
-          # Desktop entry
-          cat <<EOF > package/usr/share/applications/stegovault.desktop
+          # 4. Desktop entry yaratish (bu bosqichni ham shu yerga qo'shing)
+          cat <<EOF > ../package/usr/share/applications/stegovault.desktop
           [Desktop Entry]
           Name=StegoVault
-          Comment=Digital Steganography Vault
           Exec=/usr/bin/stegovault
           Icon=/usr/share/stegovault/static/image/logo.png
-          Terminal=false
           Type=Application
           Categories=Utility;
           EOF
 
       - name: Build DEB package
         run: |
-          mkdir -p package/usr/share/stegovault
-          mkdir -p package/usr/bin
-          mkdir -p package/usr/share/applications
-      
-          # Fayllarni nusxalash
-          cp -r * package/usr/share/stegovault/
-      
-          # Wrapper script yaratish
-          echo '#!/bin/bash' > package/usr/bin/stegovault
-          echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> package/usr/bin/stegovault
-          chmod +x package/usr/bin/stegovault
-      
-          # DEB paket yaratish
-          fpm -s dir -t deb -n stegovault -v 1.0.0 -C package usr
-          ls -l
+          # FPM endi tashqaridagi 'package' papkasidan foydalanadi
+          fpm -s dir -t deb \
+            -n stegovault \
+            -v 1.0.0 \
+            -C ../package \
+            -p stegovault_1.0.0_amd64.deb \
+            --depends python3 \
+            --depends python3-tk \
+            usr
 
       - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
