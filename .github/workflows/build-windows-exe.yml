@@ -1,0 +1,87 @@
+name: Build Windows EXE Professional
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'windows_v*'
+  workflow_dispatch: {}
+
+jobs:
+
+  checkout-repo:
+    name: Checkout Repository
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+  setup-python:
+    name: Setup Python & Dependencies
+    runs-on: windows-latest
+    needs: checkout-repo
+    steps:
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+  generate-icon:
+    name: Generate Windows Icon
+    runs-on: windows-latest
+    needs: setup-python
+    steps:
+      - name: Generate ICO
+        shell: python
+        run: |
+          import os
+          from PIL import Image
+          logo_path = 'static/image/logo.png'
+          if os.path.exists(logo_path):
+              img = Image.open(logo_path)
+              img.save('logo.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])
+              print("logo.ico generated successfully.")
+          else:
+              print(f"Warning: {logo_path} not found.")
+
+  build-exe:
+    name: Build Standalone EXE
+    runs-on: windows-latest
+    needs: generate-icon
+    steps:
+      - name: Build EXE
+        run: pyinstaller --clean stegovault.spec
+
+  test-exe:
+    name: Test EXE Existence
+    runs-on: windows-latest
+    needs: build-exe
+    steps:
+      - name: Check EXE
+        shell: pwsh
+        run: |
+          if (Test-Path "dist/StegoVault.exe") {
+            Write-Host "Success: Executable found at dist/StegoVault.exe"
+          } else {
+            Write-Host "Error: Executable NOT found!"
+            exit 1
+          }
+
+  upload-artifact:
+    name: Upload Build Artifact
+    runs-on: windows-latest
+    needs: test-exe
+    steps:
+      - name: Upload EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: dist/StegoVault.exe
+          retention-days: 5
