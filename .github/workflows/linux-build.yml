@@ -28,58 +28,64 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y python3-tk libgl1 libglib2.0-0 ruby ruby-dev build-essential
+          # fpm-ni pip orqali emas, gem orqali o'rnatish ishonchliroq
+          sudo gem install fpm
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pillow fpm
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pillow
 
       - name: Prepare Package Structure
         run: |
-          # 1. Toza va vaqtinchalik papka yaratamiz (loyiha ichida emas)
+          # 1. Loyihadan tashqarida vaqtinchalik papka yaratish
           mkdir -p ../package/usr/share/stegovault
           mkdir -p ../package/usr/bin
           mkdir -p ../package/usr/share/applications
 
-          # 2. Hamma fayllarni nusxalash (faqat kerakli qismlarni)
-          # 'package' papkasini o'z ichiga olmasligi uchun 'cp' buyrug'ini to'g'ri beramiz
+          # 2. Loyiha fayllarini nusxalash
           cp -r . ../package/usr/share/stegovault/
           
-          # Keraksiz git va vaqtinchalik fayllarni o'chirib tashlaymiz (ixtiyoriy, lekin tavsiya etiladi)
+          # Keraksiz papkalarni tozalash
           rm -rf ../package/usr/share/stegovault/.git
           rm -rf ../package/usr/share/stegovault/.github
 
           # 3. Wrapper script yaratish
-          echo '#!/bin/bash' > ../package/usr/bin/stegovault
-          echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> ../package/usr/bin/stegovault
+          cat <<EOF > ../package/usr/bin/stegovault
+          #!/bin/bash
+          cd /usr/share/stegovault && python3 app.py "\$@"
+          EOF
           chmod +x ../package/usr/bin/stegovault
 
-          # 4. Desktop entry yaratish (bu bosqichni ham shu yerga qo'shing)
+          # 4. Desktop entry yaratish (App listda ko'rinishi uchun)
           cat <<EOF > ../package/usr/share/applications/stegovault.desktop
           [Desktop Entry]
           Name=StegoVault
+          Comment=Steganography Tool
           Exec=/usr/bin/stegovault
           Icon=/usr/share/stegovault/static/image/logo.png
+          Terminal=false
           Type=Application
           Categories=Utility;
           EOF
 
       - name: Build DEB package
         run: |
-          # FPM endi tashqaridagi 'package' papkasidan foydalanadi
+          # Paket hozirgi ishchi papkada (root) yaratiladi
           fpm -s dir -t deb \
             -n stegovault \
             -v 1.0.0 \
             -C ../package \
-            -p stegovault_1.0.0_amd64.deb \
+            -p stegovault.deb \
             --depends python3 \
             --depends python3-tk \
+            --description "StegoVault Image Steganography Tool" \
             usr
 
       - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
         with:
           name: StegoVault-Linux-DEB
-          path: stegovault_*.deb
-          if-no-files-found: warn
+          path: stegovault.deb
+          if-no-files-found: error
