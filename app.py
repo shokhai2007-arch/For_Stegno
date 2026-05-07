@@ -24,17 +24,16 @@ Barcha endpointlar main.js bilan mos:
 import os
 import sys
 import webbrowser
-from flask import Flask, render_template, request, jsonify, abort
 
 import base64
 import io
 import logging
 import mimetypes
-import os
 import tempfile
 import traceback
 import zipfile
 from pathlib import Path
+from werkzeug.utils import secure_filename
 
 from flask import Flask, jsonify, render_template, request, send_file
 
@@ -51,9 +50,6 @@ from logic import (
     image_capacity,
 )
 
-import logging
-import base64
-import mimetypes
 
 # PyInstaller compatibility: Locate static/templates when bundled
 if getattr(sys, 'frozen', False):
@@ -193,8 +189,6 @@ def api_image_capacity():
     except Exception as e:
         logger.error(f"Capacity check error: {e}", exc_info=True)
         return _err("Could not read image capacity. Ensure it is a valid PNG/JPG. ", 400)
-    logger.error(f"Capacity check error: {exc}", exc_info=True)
-    return jsonify({"ok": False, "error": "Could not read image capacity. Ensure it is a valid PNG/JPG."}), 400
 
 
 
@@ -320,7 +314,8 @@ def api_video_capacity():
         return _err("Qo'llab-quvvatlanmaydigan video format.")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        ext        = Path(cover_file.filename).suffix.lower() or '.mp4'
+        raw_ext = Path(cover_file.filename).suffix.lower()
+        ext = raw_ext if raw_ext in ALLOWED_VIDEO_EXTS else '.mp4'
         cover_path = os.path.join(tmpdir, f"cover{ext}")
         cover_file.save(cover_path)
 
@@ -361,7 +356,8 @@ def api_video_encode():
     out_ext  = None
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        input_ext  = Path(cover_file.filename).suffix.lower()
+        raw_ext = Path(cover_file.filename).suffix.lower()
+        input_ext = raw_ext if raw_ext in ALLOWED_VIDEO_EXTS else '.mp4'
         cover_path = os.path.join(tmpdir, f"cover{input_ext}")
         cover_file.save(cover_path)
 
@@ -408,7 +404,6 @@ def api_video_encode():
         download_name="stego_video.zip",
     )
 
-import mimetypes
 
 def debug_secret(data, filename=None):
     print("Size:", len(data))
@@ -461,7 +456,7 @@ def api_video_decode():
     mime            = None
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        safe_name   = Path(encoded_file.filename).name
+        safe_name   = secure_filename(encoded_file.filename) or "upload.bin"
         upload_path = os.path.join(tmpdir, safe_name)
         encoded_file.save(upload_path)
 

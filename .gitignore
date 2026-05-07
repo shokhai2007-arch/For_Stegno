@@ -34,5 +34,5 @@ Thumbs.db
 *.iws
 /out/
 
-# shaxsiy folderlar
-yangi_html/
+# github
+.github/

@@ -25,6 +25,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+
 # ===========================================================================
 # ZERO-WIDTH BELGILAR (Matn steganografiyasi)
 # ===========================================================================
@@ -453,8 +454,16 @@ def decode_video(encoded_path: str) -> tuple:
     Returns:
         (secret_data: bytes, secret_filename: str)
     """
+    abs_path = os.path.abspath(encoded_path)
+    if not os.path.isfile(abs_path):
+        raise ValueError("Kodlangan video fayli topilmadi.")
+
+    # FFmpeg argumentida option-injection oldini olish uchun file: prefiksi
+    ffmpeg_input = f"file:{abs_path}"
+
     # Video o'lchamini aniqlaymiz
-    probe = cv2.VideoCapture(encoded_path)
+    probe = cv2.VideoCapture(abs_path)
+
     if not probe.isOpened():
         raise ValueError("Kodlangan video ochilmadi.")
     width  = int(probe.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -469,7 +478,7 @@ def decode_video(encoded_path: str) -> tuple:
     # FFmpeg: video → raw BGR pipe (hech qanday konversiya yo'q)
     ffmpeg_cmd = [
         'ffmpeg', '-y',
-        '-i', encoded_path,
+        '-i', ffmpeg_input,
         '-f', 'rawvideo',
         '-pix_fmt', 'bgr24',
         'pipe:1'
