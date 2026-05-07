@@ -63,14 +63,25 @@ jobs:
 
       - name: Build DEB package
         run: |
-          fpm -s dir -t deb -n stegovault -v 1.0.0 \
-              --prefix /usr \
-              -C package \
-              usr/bin usr/share
+          mkdir -p package/usr/share/stegovault
+          mkdir -p package/usr/bin
+          mkdir -p package/usr/share/applications
+      
+          # Fayllarni nusxalash
+          cp -r * package/usr/share/stegovault/
+      
+          # Wrapper script yaratish
+          echo '#!/bin/bash' > package/usr/bin/stegovault
+          echo 'cd /usr/share/stegovault && python3 app.py "$@"' >> package/usr/bin/stegovault
+          chmod +x package/usr/bin/stegovault
+      
+          # DEB paket yaratish
+          fpm -s dir -t deb -n stegovault -v 1.0.0 -C package usr
+          ls -l
 
       - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
         with:
           name: StegoVault-Linux-DEB
           path: stegovault_*.deb
-          retention-days: 5
+          if-no-files-found: warn
