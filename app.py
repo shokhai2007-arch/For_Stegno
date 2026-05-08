@@ -83,10 +83,34 @@ def _allowed_video(filename: str) -> bool:
     return Path(filename).suffix.lower() in ALLOWED_VIDEO_EXTS
 
 
+def _safe_error_message(msg: str, code: int = 400) -> str:
+    """Clientga yuboriladigan xabarni xavfsiz ko'rinishga keltiradi."""
+    text = str(msg or "").strip()
+
+    # Server xatolari uchun ichki tafsilotlarni yashiramiz
+    if code >= 500:
+        return "An internal server error occurred."
+
+    # 4xx holatlarda ham traceback/exceptionga o'xshash matnlarni yashiramiz
+    lowered = text.lower()
+    suspicious_tokens = (
+        "traceback",
+        "exception",
+        "error:",
+        " at ",
+        "file \"",
+        "line ",
+    )
+    if any(token in lowered for token in suspicious_tokens):
+        return "The request could not be processed."
+
+    return text or "The request could not be processed."
+
+
 def _err(msg: str, code: int = 400):
     """Barcha xatolar uchun yagona JSON format: { ok: false, error: "..." }
     main.js apiPost() funksiyasi data.error dan o'qiydi."""
-    return jsonify({"ok": False, "error": msg}), code
+    return jsonify({"ok": False, "error": _safe_error_message(msg, code)}), code
 
 
 # ---------------------------------------------------------------------------
@@ -265,10 +289,11 @@ def api_audio_encode():
         return jsonify({"ok": True, "audio_b64": base64.b64encode(encoded_bytes).decode()})
 
     except ValueError as e:
-        return _err(str(e))
+        logger.warning(f"audio/encode validation error: {e}")
+        return _err("Invalid input for audio encoding.", 400)
     except Exception as e:
-        traceback.print_exc()
-        return _err(str(e), 500)
+        logger.error(f"audio/encode: {e}", exc_info=True)
+        return _err("Failed to encode audio due to a server error.", 500)
 
 
 @app.route("/api/audio/decode", methods=["POST"])
@@ -324,7 +349,7 @@ def api_video_capacity():
             return jsonify({"ok": True, "capacity_bytes": cap})
         except Exception as e:
             logger.error(f"video/capacity: {e}", exc_info=True)
-            return _err(f"Video sig'imini aniqlab bo'lmadi: {e}", 400)
+            return _err("Video sig'imini aniqlab bo'lmadi.", 400)
 
 
 @app.route("/api/video/encode", methods=["POST"])
@@ -368,7 +393,8 @@ def api_video_encode():
         try:
             capacity = get_video_capacity(cover_path)
         except Exception as e:
-            return _err(f"Video o'qib bo'lmadi: {e}")
+            logger.error(f"video/encode capacity read error: {e}", exc_info=True)
+            return _err("Video o'qib bo'lmadi.")
 
         needed = 8 + 256 + len(secret_data)
         if needed > capacity:
@@ -382,10 +408,11 @@ def api_video_encode():
         try:
             encoded_bytes, out_ext = encode_video(cover_path, secret_data, secret_filename)
         except (ValueError, RuntimeError) as e:
-            return _err(str(e))
+            logger.warning(f"video/encode validation/runtime error: {e}")
+            return _err("Video kodlashda xato yuz berdi.")
         except Exception as e:
             logger.error(f"video/encode: {e}", exc_info=True)
-            return _err(f"Kutilmagan xato: {e}", 500)
+            return _err("Kutilmagan server xatosi yuz berdi.", 500)
 
         # ZIP ni xotiraga yig'amiz (tmpdir ichida emas, to'g'ridan BytesIO)
         zip_buf = io.BytesIO()
@@ -489,10 +516,11 @@ def api_video_decode():
         try:
             secret_data, secret_filename = decode_video(video_path)
         except ValueError as e:
-            return _err(str(e))
+            logger.warning(f"video/decode validation error: {e}")
+            return _err("Dekodlash uchun yuborilgan fayl yaroqsiz.")
         except Exception as e:
             logger.error(f"video/decode: {e}", exc_info=True)
-            return _err(f"Dekodlashda xato: {e}", 500)
+            return _err("Dekodlashda server xatosi yuz berdi.", 500)
 
     # ← with bloki tugadi, tmpdir o'chirildi
     # secret_data xotirada — xavfsiz
