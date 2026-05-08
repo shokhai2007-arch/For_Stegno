@@ -1,8 +1,5 @@
 name: Main Release Workflow
 
-permissions:
-  contents: write
-
 on:
   push:
     branches:
@@ -14,6 +11,7 @@ on:
 
 jobs:
   check-and-handle-tag:
+    name: Check or Create Tag
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -24,58 +22,54 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Mening PAT tokenim
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Check Current Commit Tag
         id: check_tag
         shell: bash
         run: |
-          # Joriy commitga biriktirilgan taglarni olish (xatosiz)
-          # grep ishlatmaymiz, chunki u topolmasa exit 1 beradi
+          # Joriy commitga biriktirilgan 'v' bilan boshlanuvchi tagni olish
           CURRENT_TAG=$(git tag --points-at HEAD | grep "^v" | head -n 1 || echo "")
           
           if [ -n "$CURRENT_TAG" ]; then
-          echo "✅ Joriy commitda tag topildi: $CURRENT_TAG"
-          echo "status=exists" >> $GITHUB_OUTPUT
+            echo "✅ Joriy commitda tag topildi: $CURRENT_TAG"
+            echo "status=exists" >> $GITHUB_OUTPUT
           else
-          echo "⚠️ Joriy commitda tag topilmadi."
-          echo "status=missing" >> $GITHUB_OUTPUT
+            echo "⚠️ Joriy commitda tag topilmadi. Versiya oshirilmoqda..."
+            
+            # Oxirgi tagni qidirish
+            LATEST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v1.0.0")
+            echo "Oxirgi topilgan tag: $LATEST_TAG"
+            
+            # Versiya mantiqi (v1.0.4 -> 1.0.5)
+            VERSION_NUM=${LATEST_TAG#v}
+            IFS='.' read -r major minor patch <<< "$VERSION_NUM"
+            NEW_PATCH=$((patch + 1))
+            NEW_TAG="v$major.$minor.$NEW_PATCH"
+            
+            echo "Yangi tag yaratilmoqda: $NEW_TAG"
+            
+            # Git sozlamalari
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Tagni urish va push qilish
+            git tag $NEW_TAG
+            git push origin $NEW_TAG
+            
+            echo "status=missing" >> $GITHUB_OUTPUT
+            echo "🚀 Yangi tag yaratildi va push qilindi. Build to'xtatiladi."
+            exit 1 # Build jarayoniga o'tmaslik uchun
           fi
-
-          - name: Bump and Push New Tag
-            if: steps.check_tag.outputs.status == 'missing'
-            shell: bash
-            run: |
-              # Oxirgi mavjud tagni olish (tarixdan)
-              LATEST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v1.0.0")
-              echo "Oxirgi topilgan tag: $LATEST_TAG"
-              
-              # Versiyani oshirish
-              VERSION_NUM=${LATEST_TAG#v}
-              IFS='.' read -r major minor patch <<< "$VERSION_NUM"
-              NEW_PATCH=$((patch + 1))
-              NEW_TAG="v$major.$minor.$NEW_PATCH"
-              
-              echo "Yangi tag yaratilmoqda: $NEW_TAG"
-              
-              # Git sozlamalari
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              
-              # Tagni yaratish va push qilish
-              git tag $NEW_TAG
-              git push origin $NEW_TAG
-              
-              echo "🚀 Yangi tag push qilindi: $NEW_TAG"
-              echo "Ushbu workflow build jarayonini to'xtatadi, yangi tag uchun yangi build boshlanadi."
-              exit 1
 
   build-linux:
     needs: check-and-handle-tag
+    if: needs.check-and-handle-tag.outputs.tag_status == 'exists'
     name: Build Linux DEB Package
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -100,20 +94,20 @@ jobs:
 
       - name: Build Linux Package
         run: |
-          # Skriptga ruxsat berish va uni ishga tushirish
           chmod +x build_linux.sh
           ./build_linux.sh
 
       - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StegoVault-Linux-DEB
-          path: stegovault.deb
+          name: linux-build
+          path: "*.deb"
           if-no-files-found: error
           retention-days: 5
 
   build-windows:
     needs: check-and-handle-tag
+    if: needs.check-and-handle-tag.outputs.tag_status == 'exists'
     name: Build Windows EXE
     runs-on: windows-latest
     steps:
@@ -128,8 +122,8 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+          pip install pyinstaller pillow
 
       - name: Generate Windows Icon
         shell: python
@@ -154,43 +148,41 @@ jobs:
           retention-days: 5
 
   create-release:
-    needs: [build-linux, build-windows]
-    if: success()
+    needs: [check-and-handle-tag, build-linux, build-windows]
+    if: needs.check-and-handle-tag.outputs.tag_status == 'exists'
     name: Create GitHub Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Check if tag exists
-        id: check_tag
+      - name: Get Current Tag
+        id: get_tag
         run: |
-          TAG=$(git describe --exact-match --tags 2>/dev/null || echo "")
-          if [ -z "$TAG" ]; then
-            echo "No tag found. Skipping release."
-            echo "skip_release=true" >> $GITHUB_OUTPUT
-          else
-            echo "Tag found: $TAG"
-            echo "skip_release=false" >> $GITHUB_OUTPUT
-            echo "tag_name=$TAG" >> $GITHUB_OUTPUT
-          fi
+          TAG=$(git tag --points-at HEAD | grep "^v" | head -n 1)
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Download Artifacts
-        if: steps.check_tag.outputs.skip_release == 'false'
+      - name: Download Linux Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          name: linux-build
+          path: release-assets
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: release-assets
 
       - name: Create GitHub Release
-        if: steps.check_tag.outputs.skip_release == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.check_tag.outputs.tag_name }}
-          name: Release ${{ steps.check_tag.outputs.tag_name }}
-          files: |
-            dist/linux-build/*.deb
-            dist/windows-build/*.exe
+          tag_name: ${{ steps.get_tag.outputs.tag_name }}
+          name: Release ${{ steps.get_tag.outputs.tag_name }}
+          files: release-assets/*
           draft: false
           prerelease: false
         env:
