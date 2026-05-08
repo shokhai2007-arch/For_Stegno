@@ -35,7 +35,8 @@ jobs:
           else
             echo "⚠️ Joriy commitda tag topilmadi."
             exit 1
-
+          fi
+          
   build-linux:
     needs: check-tag
     if: success()
