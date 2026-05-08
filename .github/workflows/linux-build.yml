@@ -2,7 +2,7 @@ name: Build Linux DEB Package
 
 on:
   push:
-    branches: [ main ]
+    branches: [ linux_build ]
     tags:
       - 'linux_v*'
   workflow_dispatch: {}
@@ -48,3 +48,4 @@ jobs:
           name: StegoVault-Linux-DEB
           path: stegovault.deb
           if-no-files-found: error
+          retention-days: 5
