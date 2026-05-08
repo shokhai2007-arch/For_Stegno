@@ -29,42 +29,45 @@ jobs:
         id: check_tag
         shell: bash
         run: |
-          # Joriy commitda tag borligini tekshirish
-          CURRENT_TAG=$(git tag --points-at HEAD | grep "v*" | head -n 1)
+          # Joriy commitga biriktirilgan taglarni olish (xatosiz)
+          # grep ishlatmaymiz, chunki u topolmasa exit 1 beradi
+          CURRENT_TAG=$(git tag --points-at HEAD | grep "^v" | head -n 1 || echo "")
           
           if [ -n "$CURRENT_TAG" ]; then
-            echo "✅ Joriy commitda tag topildi: $CURRENT_TAG"
-            echo "status=exists" >> $GITHUB_OUTPUT
+          echo "✅ Joriy commitda tag topildi: $CURRENT_TAG"
+          echo "status=exists" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ Joriy commitda tag topilmadi."
-            echo "status=missing" >> $GITHUB_OUTPUT
+          echo "⚠️ Joriy commitda tag topilmadi."
+          echo "status=missing" >> $GITHUB_OUTPUT
           fi
 
-      - name: Bump and Push New Tag
-        if: steps.check_tag.outputs.status == 'missing'
-        shell: bash
-        run: |
-          # Oxirgi mavjud tagni olish (tarixdan)
-          LATEST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v1.0.0")
-          echo "Oxirgi topilgan tag: $LATEST_TAG"
-          
-          # Versiyani oshirish (v1.0.4 -> 1.0.4 -> 1.0.5)
-          VERSION_NUM=${LATEST_TAG#v}
-          IFS='.' read -r major minor patch <<< "$VERSION_NUM"
-          NEW_PATCH=$((patch + 1))
-          NEW_TAG="v$major.$minor.$NEW_PATCH"
-          
-          echo "Yangi tag yaratilmoqda: $NEW_TAG"
-          
-          # Git sozlamalari va push
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag $NEW_TAG
-          git push origin $NEW_TAG
-          
-          echo "🚀 Yangi tag push qilindi. Ushbu workflow to'xtatiladi."
-          echo "Yangi tag push qilingani sababli yangi workflow ishga tushadi."
-          exit 1 # Build jarayoniga o'tmaslik uchun to'xtatish
+          - name: Bump and Push New Tag
+            if: steps.check_tag.outputs.status == 'missing'
+            shell: bash
+            run: |
+              # Oxirgi mavjud tagni olish (tarixdan)
+              LATEST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v1.0.0")
+              echo "Oxirgi topilgan tag: $LATEST_TAG"
+              
+              # Versiyani oshirish
+              VERSION_NUM=${LATEST_TAG#v}
+              IFS='.' read -r major minor patch <<< "$VERSION_NUM"
+              NEW_PATCH=$((patch + 1))
+              NEW_TAG="v$major.$minor.$NEW_PATCH"
+              
+              echo "Yangi tag yaratilmoqda: $NEW_TAG"
+              
+              # Git sozlamalari
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              
+              # Tagni yaratish va push qilish
+              git tag $NEW_TAG
+              git push origin $NEW_TAG
+              
+              echo "🚀 Yangi tag push qilindi: $NEW_TAG"
+              echo "Ushbu workflow build jarayonini to'xtatadi, yangi tag uchun yangi build boshlanadi."
+              exit 1
 
   build-linux:
     needs: check-and-handle-tag
