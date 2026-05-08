@@ -1,7 +1,7 @@
 #!/bin/bash
 # build_linux.sh
 
-VERSION="1.0.0"
+VERSION="1.0.4"
 PKG_DIR="../package"
 
 # 1. Eski build qoldiqlarini tozalash
