@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0    # Barcha tarixni yuklash
           fetch-tags: true   # Barcha taglarni yuklash (MUHIM!)
-          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          token: ${{ secrets.MY_GITHUB_PAT }}
 
       - name: Check Current Commit Tag
         id: check_tag
