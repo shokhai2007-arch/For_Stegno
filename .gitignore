@@ -33,6 +33,3 @@ Thumbs.db
 *.iml
 *.iws
 /out/
-
-# github
-.github/
