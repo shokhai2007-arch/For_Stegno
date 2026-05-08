@@ -9,8 +9,8 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  check-and-handle-tag:
-    name: Check or Create Tag
+  check-tag:
+    name: Check Tag
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,8 +21,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Mening PAT tokenim
-          token: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Check Current Commit Tag
         id: check_tag
@@ -35,36 +33,12 @@ jobs:
             echo "✅ Joriy commitda tag topildi: $CURRENT_TAG"
             echo "status=exists" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ Joriy commitda tag topilmadi. Versiya oshirilmoqda..."
-            
-            # Oxirgi tagni qidirish
-            LATEST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v1.0.0")
-            echo "Oxirgi topilgan tag: $LATEST_TAG"
-            
-            # Versiya mantiqi (v1.0.4 -> 1.0.5)
-            VERSION_NUM=${LATEST_TAG#v}
-            IFS='.' read -r major minor patch <<< "$VERSION_NUM"
-            NEW_PATCH=$((patch + 1))
-            NEW_TAG="v$major.$minor.$NEW_PATCH"
-            
-            echo "Yangi tag yaratilmoqda: $NEW_TAG"
-            
-            # Git sozlamalari
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            
-            # Tagni urish va push qilish
-            git tag $NEW_TAG
-            git push origin $NEW_TAG
-            
-            echo "status=missing" >> $GITHUB_OUTPUT
-            echo "🚀 Yangi tag yaratildi va push qilindi. Build to'xtatiladi."
-            exit 1 # Build jarayoniga o'tmaslik uchun
-          fi
+            echo "⚠️ Joriy commitda tag topilmadi."
+            exit 1
 
   build-linux:
-    needs: check-and-handle-tag
-    if: needs.check-and-handle-tag.outputs.tag_status == 'exists'
+    needs: check-tag
+    if: success()
     name: Build Linux DEB Package
     runs-on: ubuntu-latest
     permissions:
@@ -105,8 +79,8 @@ jobs:
           retention-days: 5
 
   build-windows:
-    needs: check-and-handle-tag
-    if: needs.check-and-handle-tag.outputs.tag_status == 'exists'
+    needs: check-tag
+    if: success()
     name: Build Windows EXE
     runs-on: windows-latest
     steps:
@@ -147,8 +121,8 @@ jobs:
           retention-days: 5
 
   create-release:
-    needs: [check-and-handle-tag, build-linux, build-windows]
-    if: needs.check-and-handle-tag.outputs.tag_status == 'exists'
+    needs: [check-tag, build-linux, build-windows]
+    if: success()
     name: Create GitHub Release
     runs-on: ubuntu-latest
     permissions:
